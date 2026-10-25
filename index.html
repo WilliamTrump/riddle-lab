@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Riddle Lab</title>
+<meta name="description" content="Classic riddles and brain teasers, each with a sandbox for trying strategies until you crack it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="shared/shell.css">
+<style>
+:root { --robot-a: #D45A22; --robot-b: #2F68C8; --hat-black: #1A2129; --hat-white: #F8FAFB; --hat-stroke: #6B7887; --preview: #E4EAF0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --robot-a: #DB6E38; --robot-b: #5B92E5; --hat-black: #06090C; --hat-white: #EEF2F5; --hat-stroke: #8C99A8; --preview: #121A23; }
+}
+:root[data-theme="dark"] { --robot-a: #DB6E38; --robot-b: #5B92E5; --hat-black: #06090C; --hat-white: #EEF2F5; --hat-stroke: #8C99A8; --preview: #121A23; }
+
+.hero { display: grid; gap: 10px; padding-block: 28px 10px; }
+.hero h1 { font-size: clamp(34px, 5.5vw, 56px); max-width: 16ch; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 58ch; font-size: 16.5px; }
+
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card {
+  display: grid; grid-template-rows: auto 1fr; text-decoration: none; color: inherit; background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; transition: border-color .15s, transform .15s;
+}
+.card:hover { border-color: var(--rule-strong); transform: translateY(-2px); }
+.card:focus-visible { outline-offset: 3px; }
+.preview { background: var(--preview); border-bottom: 1px solid var(--rule); }
+.preview svg { display: block; width: 100%; height: auto; }
+.card-body { padding: 16px 18px 18px; display: grid; gap: 8px; align-content: start; }
+.card h2 { margin: 0; font: 700 22px/1.15 var(--font-display); letter-spacing: -0.01em; }
+.card p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.open { margin-top: 6px; font-weight: 600; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .card, .card:hover { transition: none; transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="site-bar">
+    <a class="wordmark" href="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--ink)"/><path d="M8 9.5a4 4 0 1 1 5.6 3.7c-.9.4-1.6 1.1-1.6 2.1v.4" stroke="var(--on-ink)" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="18.6" r="1.2" fill="var(--on-ink)"/></svg>Riddle Lab</a>
+  </nav>
+
+  <header class="hero">
+    <h1>Riddles you can play with</h1>
+    <p>Try ideas, watch them run, and see where they break.</p>
+  </header>
+
+  <section class="grid" aria-label="Puzzles">
+    <a class="card" href="puzzles/prisoner-hats/index.html">
+      <div class="preview">
+        <svg viewBox="0 0 400 150" aria-hidden="true">
+          <g id="hats"></g>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h2>The Prisoner Hats</h2>
+        <p>Ten prisoners, two hat colors, one word each.</p>
+        <div class="tags"><span class="chip">Video</span><span class="chip">Play</span><span class="chip">Code</span></div>
+        <span class="open">Play →</span>
+      </div>
+    </a>
+
+    <a class="card" href="puzzles/parachuting-robots/index.html">
+      <div class="preview">
+        <svg viewBox="0 0 400 150" aria-hidden="true">
+          <line x1="20" y1="112" x2="380" y2="112" stroke="var(--rule-strong)" stroke-width="1.5"/>
+          <g id="ticks"></g>
+          <path d="M108 112 c0-14 30-14 30 0z" fill="var(--robot-b)" fill-opacity="0.18" stroke="var(--robot-b)" stroke-width="1.5"/>
+          <path d="M262 112 c0-14 30-14 30 0z" fill="var(--robot-a)" fill-opacity="0.18" stroke="var(--robot-a)" stroke-width="1.5"/>
+          <g transform="translate(80 0)"><line x1="0" y1="66" x2="0" y2="76" stroke="var(--robot-a)" stroke-width="1.5"/><circle cx="0" cy="65" r="2.5" fill="var(--robot-a)"/><rect x="-11" y="76" width="22" height="24" rx="5" fill="var(--robot-a)"/><rect x="-7" y="81" width="14" height="7" rx="3.5" fill="var(--surface)"/><circle cx="-6" cy="105" r="3" fill="var(--ink)"/><circle cx="6" cy="105" r="3" fill="var(--ink)"/></g>
+          <g transform="translate(232 0)"><line x1="0" y1="66" x2="0" y2="76" stroke="var(--robot-b)" stroke-width="1.5"/><circle cx="0" cy="65" r="2.5" fill="var(--robot-b)"/><rect x="-11" y="76" width="22" height="24" rx="5" fill="var(--robot-b)"/><rect x="-7" y="81" width="14" height="7" rx="3.5" fill="var(--surface)"/><circle cx="-6" cy="105" r="3" fill="var(--ink)"/><circle cx="6" cy="105" r="3" fill="var(--ink)"/></g>
+          <path d="M232 46 h-120" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/><path d="M118 41 l-7 5 7 5" fill="none" stroke="var(--muted)" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h2>Parachuting Robots</h2>
+        <p>Two robots, one program. Make them meet.</p>
+        <div class="tags"><span class="chip">Code</span></div>
+        <span class="open">Play →</span>
+      </div>
+    </a>
+  </section>
+</div>
+<script>
+// small decorative previews, drawn from the same shapes the puzzles use
+const hats = ["black", "white", "white", "black", "white", "black", "black", "white"];
+let h = "";
+hats.forEach((c, i) => {
+  const x = 44 + i * 45;
+  h += `<rect x="${x - 15}" y="96" width="30" height="40" rx="12" fill="var(--rule-strong)" fill-opacity="0.6"/>`;
+  h += `<circle cx="${x}" cy="82" r="12" fill="var(--surface)" stroke="var(--rule-strong)"/>`;
+  const hidden = i === 0;
+  h += `<rect x="${x - 10}" y="52" width="20" height="20" rx="2.5" fill="${hidden ? "none" : `var(--hat-${c})`}" stroke="${hidden ? "var(--muted)" : "var(--hat-stroke)"}" stroke-width="1.5"${hidden ? ' stroke-dasharray="3 3"' : ""}/>`;
+  h += `<rect x="${x - 15}" y="70" width="30" height="5" rx="2.5" fill="${hidden ? "var(--preview)" : `var(--hat-${c})`}" stroke="${hidden ? "var(--muted)" : "var(--hat-stroke)"}" stroke-width="1.5"${hidden ? ' stroke-dasharray="3 3"' : ""}/>`;
+  if (hidden) h += `<text x="${x}" y="67" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)" font-family="var(--font-body)">?</text>`;
+});
+h += `<rect x="16" y="14" width="56" height="24" rx="7" fill="var(--surface)" stroke="var(--rule-strong)"/><text x="44" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)" font-family="var(--font-mono)">black</text>`;
+document.getElementById("hats").innerHTML = h;
+let t = "";
+for (let x = 20; x <= 380; x += 22.5) t += `<line x1="${x}" y1="113" x2="${x}" y2="118" stroke="var(--rule)"/>`;
+document.getElementById("ticks").innerHTML = t;
+</script>
+</body>
+</html>

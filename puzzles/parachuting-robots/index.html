@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parachuting Robots · Riddle Lab</title>
+<meta name="description" content="Write one program for two robots dropped on an infinite line and watch whether they meet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../shared/shell.css">
+<style>
+:root {
+  --sky: #E2EAF2; --robot-a: #D45A22; --robot-b: #2F68C8;
+  --code-size: 14px; --code-lh: 22px; --code-pad: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --sky: #121A23; --robot-a: #DB6E38; --robot-b: #5B92E5; }
+}
+:root[data-theme="dark"] { --sky: #121A23; --robot-a: #DB6E38; --robot-b: #5B92E5; }
+.status[data-state="running"] .dot { background: var(--robot-b); }
+.ref code { font: 600 12.5px var(--font-mono); color: var(--ink); }
+.stepper { display: inline-flex; align-items: stretch; }
+
+/* Stage */
+.stage {
+  position: relative; background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--radius); overflow: hidden;
+}
+.stage canvas { display: block; width: 100%; height: 250px; }
+.hud {
+  position: absolute; top: 12px; left: 14px; right: 14px; display: flex; flex-wrap: wrap;
+  justify-content: space-between; gap: 8px; pointer-events: none;
+}
+.hud-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.readout {
+  font: 500 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2);
+  background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--rule);
+  padding: 6px 9px; border-radius: 6px;
+}
+.readout b { color: var(--ink); font-weight: 600; }
+
+/* Workbench */
+.bench { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 18px; align-items: start; }
+@media (max-width: 880px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 18px; min-width: 0; }
+
+/* Editor */
+.editor { display: grid; grid-template-columns: auto minmax(0, 1fr); height: 340px; background: var(--surface-2); }
+.gutter {
+  overflow: hidden; border-right: 1px solid var(--rule); background: var(--surface-2);
+  font: 400 12px/var(--code-lh) var(--font-mono); color: var(--muted); user-select: none;
+}
+.gutter-inner { padding-block: var(--code-pad); }
+.gl { height: var(--code-lh); display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 10px 0 8px; min-width: 64px; font-variant-numeric: tabular-nums; }
+.gl.err { color: var(--bad); font-weight: 600; }
+.tag {
+  font: 600 10px/1 var(--font-mono); color: var(--on-ink); border-radius: 4px; padding: 3px 4px;
+}
+.tag.a { background: var(--robot-a); }
+.tag.b { background: var(--robot-b); }
+.code { position: relative; overflow: hidden; min-width: 0; }
+.code textarea, .code pre {
+  margin: 0; border: 0; padding: var(--code-pad); font: 400 var(--code-size)/var(--code-lh) var(--font-mono);
+  white-space: pre; tab-size: 2; letter-spacing: 0; word-spacing: 0;
+}
+.code textarea {
+  position: absolute; inset: 0; width: 100%; height: 100%; resize: none; outline: none;
+  background: transparent; color: transparent; caret-color: var(--ink); overflow: auto; z-index: 2;
+}
+.code textarea::selection { background: color-mix(in srgb, var(--robot-b) 28%, transparent); color: transparent; }
+.code textarea:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.code pre { position: absolute; top: 0; left: 0; color: var(--ink); pointer-events: none; z-index: 1; min-width: 100%; }
+.hl-bars { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; z-index: 0; }
+.hl-bar { position: absolute; left: 0; right: 0; height: var(--code-lh); }
+.hl-bar.a { background: color-mix(in srgb, var(--robot-a) 16%, transparent); }
+.hl-bar.b { background: color-mix(in srgb, var(--robot-b) 16%, transparent); }
+.hl-bar.ab { background: linear-gradient(90deg, color-mix(in srgb, var(--robot-a) 16%, transparent), color-mix(in srgb, var(--robot-b) 16%, transparent)); }
+.hl-bar.err { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.t-op { font-weight: 600; }
+.t-label { color: var(--syn-label); font-weight: 500; }
+.t-comment { color: var(--muted); font-style: italic; }
+.t-bad { color: var(--bad); text-decoration: underline wavy; text-underline-offset: 3px; }
+
+.editor-foot { border-top: 1px solid var(--rule); padding: 12px 14px; display: grid; gap: 10px; }
+.error { color: var(--bad); font-size: 14px; margin: 0; }
+.ref { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-2); }
+.ref code { font: 600 12.5px var(--font-mono); color: var(--ink); }
+
+.stepper { display: inline-flex; align-items: stretch; }
+.stepper input { width: 64px; text-align: center; border-radius: 0; border-inline: 0; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.stepper .btn { height: auto; padding: 0 11px; border-radius: 0; }
+.stepper .btn:first-child { border-radius: 7px 0 0 7px; }
+.stepper .btn:last-child { border-radius: 0 7px 7px 0; }
+/* Robot table */
+.robots { width: 100%; border-collapse: collapse; font-size: 14px; }
+.robots th { text-align: left; font: 600 11px var(--font-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 8px 8px 0; }
+.robots td { padding: 8px 8px 8px 0; border-top: 1px solid var(--rule); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.robots td:last-child, .robots th:last-child { padding-right: 0; }
+.who { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; }
+.mono { font-family: var(--font-mono); font-size: 13px; }
+@media (max-width: 520px) {
+  .stage canvas { height: 210px; }
+  .editor { height: 320px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status[data-state="running"] .dot { animation: none; }
+}
+.ref { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.stage .callout { position: relative; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="site-bar">
+    <a class="wordmark" href="../../index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--ink)"/><path d="M8 9.5a4 4 0 1 1 5.6 3.7c-.9.4-1.6 1.1-1.6 2.1v.4" stroke="var(--on-ink)" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="18.6" r="1.2" fill="var(--on-ink)"/></svg>Riddle Lab</a>
+    <a class="back" href="../../index.html">All puzzles</a>
+  </nav>
+
+  <section class="intro no-video">
+    <div class="intro-text">
+      <h1>Parachuting Robots</h1>
+      <p>Two robots land somewhere on an endless line and leave their parachutes where they land. Both run the same program and can't see each other.</p>
+      <p class="goal">Write a program that makes them meet.</p>
+    </div>
+  </section>
+
+  <section class="stage" data-sandbox aria-label="Simulation">
+    <canvas id="stage" role="img" aria-label="Two robots on a line"></canvas>
+    <div class="hud">
+      <div class="hud-group">
+        <span class="readout">Cycle <b id="hud-cycle">0</b></span>
+        <span class="readout">Apart <b id="hud-dist">0</b></span>
+      </div>
+      <span class="status" id="status" data-state="ready" role="status"><span class="dot"></span><span id="status-text">Ready</span></span>
+    </div>
+    <div class="callout" id="callout" hidden></div>
+  </section>
+
+  <div class="bench">
+    <section class="panel" aria-label="Program">
+      <div class="panel-head">
+        <span class="label">Program</span>
+        <select id="examples" aria-label="Load an example">
+          <option value="">Examples…</option>
+          <option value="starter">Same speed (fails)</option>
+          <option value="blank">Blank</option>
+        </select>
+      </div>
+      <div class="editor">
+        <div class="gutter" aria-hidden="true"><div class="gutter-inner" id="gutter"></div></div>
+        <div class="code">
+          <div class="hl-bars" id="bars"></div>
+          <pre id="highlight" aria-hidden="true"></pre>
+          <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Program source"></textarea>
+        </div>
+      </div>
+      <div class="editor-foot">
+        <p class="error" id="error" hidden></p>
+        <ul class="ref">
+          <li><code>left</code> <code>right</code> move</li>
+          <li><code>skipNext</code> skip a line if on a parachute</li>
+          <li><code>goto x</code> jump to <code>x:</code></li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="panel" aria-label="Run">
+        <div class="panel-body">
+          <div class="row">
+            <button class="btn primary" id="play" type="button" title="Space"><svg viewBox="0 0 16 16" id="play-icon"><path d="M4 2.5v11l9-5.5z"/></svg><span id="play-label">Play</span></button>
+            <button class="btn" id="step" type="button" title="Right arrow">Step</button>
+            <button class="btn" id="reset" type="button" title="R">Reset</button>
+          </div>
+          <div class="field">
+            <div class="field-line"><label for="speed">Speed</label><output id="speed-out" for="speed"></output></div>
+            <input type="range" id="speed" min="0" max="100" value="40">
+          </div>
+          <div class="field-line">
+            <label for="gap">Start apart</label>
+            <div class="row">
+              <div class="stepper">
+                <button class="btn" type="button" id="gap-dec" aria-label="Closer">−</button>
+                <input type="number" id="gap" min="1" max="200" value="6">
+                <button class="btn" type="button" id="gap-inc" aria-label="Further">+</button>
+              </div>
+              <button class="btn" type="button" id="gap-rand" title="Random gap">Random</button>
+            </div>
+          </div>
+          <table class="robots">
+            <thead><tr><th>Robot</th><th>Cell</th><th>Next</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><span class="who"><span class="swatch" style="background:var(--robot-a)"></span>A</span></td><td class="mono" id="a-pos"></td><td class="mono" id="a-next"></td><td id="a-chute"></td></tr>
+              <tr><td><span class="who"><span class="swatch" style="background:var(--robot-b)"></span>B</span></td><td class="mono" id="b-pos"></td><td class="mono" id="b-next"></td><td id="b-chute"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel" id="checker" aria-label="Test every gap"></section>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Hints">
+    <div class="panel-head"><span class="label">Hints</span></div>
+    <ol class="ladder">
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">1</span><span class="t">Hint 1</span></button>
+        <div class="rung-body" hidden><p>Same program, same moves. What's the only thing that can be different for one robot?</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">2</span><span class="t">Hint 2</span></button>
+        <div class="rung-body" hidden><p>If both walk the same way, only the one behind ever reaches the other's parachute.</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">3</span><span class="t">Hint 3</span></button>
+        <div class="rung-body" hidden><p>Walk slowly. Speed up once you find a parachute.</p></div></li>
+      <li class="rung solution"><button class="rung-btn" type="button"><span class="n">✓</span><span class="t">Solution</span></button>
+        <div class="rung-body" hidden>
+          <p>Crawl left (3 cycles per cell). The robot behind finds the other parachute, drops into a sprint (2 cycles per cell) and catches up.</p>
+<pre>crawl:
+  left
+  skipNext
+  goto crawl
+sprint:
+  left
+  goto sprint</pre>
+          <div><button class="btn" type="button" data-load-solution>Load it</button></div>
+        </div></li>
+    </ol>
+  </section>
+  <p class="credit hint">Puzzle via <a href="https://david-peter.de/parachuting-robots/" target="_blank" rel="noopener">david-peter.de</a></p>
+</div>
+
+<script src="../../shared/engine.js"></script>
+<script src="../../shared/shell.js"></script>
+<script src="puzzle.js"></script>
+<script>
+(() => {
+"use strict";
+const RL = window.RiddleLab, P = RL.puzzles["parachuting-robots"];
+const runner = new RL.Runner(P);
+
+const EXAMPLES = {
+  starter: `# Both walk left at the same speed.
+# Can the parachutes help?
+start:
+  left
+  goto start
+`,
+  blank: `start:
+  `,
+  solution: `crawl:
+  left
+  skipNext
+  goto crawl
+sprint:
+  left
+  goto sprint
+`,
+};
+
+const $ = id => document.getElementById(id);
+const code = $("code"), hl = $("highlight"), gutter = $("gutter"), bars = $("bars");
+const canvas = $("stage"), ctx = canvas.getContext("2d");
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const STORE_KEY = "parachuting-robots:program";
+const store = {
+  get() { try { return localStorage.getItem(STORE_KEY); } catch { return null; } },
+  set(v) { try { localStorage.setItem(STORE_KEY, v); } catch {} },
+};
+
+let program = null, parseErr = null;
+let draw = [];        // per robot: {from, to, t0, dur}
+let landT0 = 0, cam = null, lastFrame = 0;
+const LAND_MS = reducedMotion ? 0 : 1300;
+const sim = () => runner.state;
+
+// ---------- Editor ----------
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const OPS = /\b(left|right|skipNext|skipnext|goto)\b(\s+([A-Za-z_][\w-]*))?/gi;
+
+function highlightLine(raw, isErr) {
+  const cut = raw.search(/#|\/\//);
+  const body = cut < 0 ? raw : raw.slice(0, cut), comment = cut < 0 ? "" : raw.slice(cut);
+  let out = esc(body).replace(/([A-Za-z_][\w-]*)(\s*:)/g, '<span class="t-label">$1</span>$2');
+  out = out.replace(OPS, (m, op, rest, arg) => `<span class="t-op">${op}</span>` + (rest ? rest.replace(arg, `<span class="t-label">${arg}</span>`) : ""));
+  if (isErr) out = `<span class="t-bad">${out}</span>`;
+  return out + (comment ? `<span class="t-comment">${esc(comment)}</span>` : "");
+}
+
+function renderEditor() {
+  const errLine = parseErr ? parseErr.line : -1;
+  hl.innerHTML = code.value.split("\n").map((l, i) => highlightLine(l, i + 1 === errLine)).join("\n") + "\n";
+  renderMarkers();
+}
+
+function renderMarkers() {
+  const lines = code.value.split("\n");
+  const errLine = parseErr ? parseErr.line : -1;
+  const at = new Map();
+  if (sim() && !parseErr) sim().robots.forEach((r, i) => {
+    const x = program.ins[r.pc];
+    if (x) at.set(x.line, (at.get(x.line) || "") + (i ? "b" : "a"));
+  });
+  gutter.innerHTML = lines.map((_, i) => {
+    const n = i + 1, who = at.get(n) || "";
+    const tags = (who.includes("a") ? '<span class="tag a">A</span>' : "") + (who.includes("b") ? '<span class="tag b">B</span>' : "");
+    return `<div class="gl${n === errLine ? " err" : ""}">${tags}<span>${n}</span></div>`;
+  }).join("");
+  const cs = getComputedStyle(document.documentElement);
+  const lh = parseFloat(cs.getPropertyValue("--code-lh")), pad = parseFloat(cs.getPropertyValue("--code-pad"));
+  let html = errLine > 0 ? `<div class="hl-bar err" style="top:${pad + (errLine - 1) * lh}px"></div>` : "";
+  for (const [line, who] of at) html += `<div class="hl-bar ${who}" style="top:${pad + (line - 1) * lh}px"></div>`;
+  bars.innerHTML = html;
+  syncScroll();
+}
+
+function syncScroll() {
+  hl.style.transform = `translate(${-code.scrollLeft}px, ${-code.scrollTop}px)`;
+  bars.style.transform = gutter.style.transform = `translateY(${-code.scrollTop}px)`;
+}
+
+function compile() {
+  try { program = P.compile(code.value); parseErr = null; }
+  catch (e) { program = null; parseErr = e; }
+  $("error").hidden = !parseErr;
+  if (parseErr) $("error").textContent = `Line ${parseErr.line}: ${parseErr.message}`;
+}
+
+let editTimer = 0;
+code.addEventListener("input", () => {
+  store.set(code.value);
+  compile(); renderEditor(); checker.clear();
+  clearTimeout(editTimer);
+  editTimer = setTimeout(() => reset(false), 250);
+});
+code.addEventListener("scroll", syncScroll);
+code.addEventListener("keydown", e => {
+  if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    code.setRangeText("  ", code.selectionStart, code.selectionEnd, "end");
+    code.dispatchEvent(new Event("input"));
+  }
+  if (e.key === "Enter") {
+    const s = code.selectionStart, line = code.value.slice(0, s).split("\n").pop();
+    const indent = (line.match(/^\s*/) || [""])[0];
+    const next = !indent && /:\s*$/.test(line.split(/#|\/\//)[0]) ? "  " : indent;
+    if (next) { e.preventDefault(); code.setRangeText("\n" + next, s, code.selectionEnd, "end"); code.dispatchEvent(new Event("input")); }
+  }
+});
+
+function loadProgram(src) { code.value = src; code.dispatchEvent(new Event("input")); reset(true); }
+$("examples").addEventListener("change", e => { if (e.target.value) loadProgram(EXAMPLES[e.target.value]); e.target.value = ""; });
+document.addEventListener("shell:load-solution", () => loadProgram(EXAMPLES.solution));
+
+// ---------- Running ----------
+const gapValue = () => {
+  const g = Math.round(Number($("gap").value));
+  return Math.min(200, Math.max(1, Number.isFinite(g) ? g : 6));
+};
+const cps = () => Math.round(10 ** (Number($("speed").value) / 100 * 3));
+
+function reset(animateLanding = true, note = "") {
+  const g = gapValue();
+  $("gap").value = g;
+  if (program) runner.load(program, g); else { runner.state = null; runner.playing = false; }
+  draw = [0, g].map(p => ({ from: p, to: p, t0: 0, dur: 0 }));
+  landT0 = animateLanding ? performance.now() : -Infinity;
+  cam = null;
+  $("callout").hidden = !note;
+  $("callout").innerHTML = note;
+  updateUI();
+}
+
+runner.on((ev) => {
+  if (ev.type === "step" && ev.count) {
+    const now = performance.now();
+    const dur = reducedMotion || ev.count > 1 ? 0 : Math.min(180, 900 / cps());
+    sim().robots.forEach((r, i) => { draw[i] = { from: currentX(i, now), to: r.pos, t0: now, dur }; });
+  }
+  updateUI();
+});
+
+function togglePlay() {
+  if (!sim()) return;
+  if (runner.finished) reset(false);
+  landT0 = -Infinity;
+  runner.speed = cps();
+  runner.playing ? runner.pause() : runner.play();
+}
+
+function updateUI() {
+  const s = sim(), r = runner.result;
+  let state = "ready", label = "Ready";
+  if (parseErr) { state = "error"; label = "Fix the program"; }
+  else if (r && r.ok) { state = "met"; label = `✓ ${r.text}`; }
+  else if (r) { state = "fail"; label = `✕ ${r.text}`; }
+  else if (runner.playing) { state = "running"; label = "Running"; }
+  else if (s && s.cycle > 0) { state = "paused"; label = "Paused"; }
+  $("status").dataset.state = state; $("status-text").textContent = label;
+
+  $("play-label").textContent = runner.playing ? "Pause" : r ? "Replay" : "Play";
+  $("play-icon").innerHTML = runner.playing ? '<path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
+  $("play").disabled = !s;
+  $("step").disabled = !s || runner.finished;
+  $("hud-cycle").textContent = s ? s.cycle.toLocaleString() : "0";
+  $("hud-dist").textContent = s ? P.distance(s).toLocaleString() : "–";
+
+  ["a", "b"].forEach((k, i) => {
+    const rb = s && s.robots[i], x = rb && program.ins[rb.pc];
+    $(`${k}-pos`).textContent = rb ? (rb.pos > 0 ? "+" : "") + rb.pos : "–";
+    $(`${k}-next`).textContent = rb ? (x ? (x.arg ? `goto ${x.arg}` : x.op) : "stopped") : "–";
+    const owner = rb ? s.chutes.get(rb.pos) : undefined;
+    $(`${k}-chute`).innerHTML = owner === undefined ? "" : `<span class="chip">on ${owner === i ? "own" : "other"} chute</span>`;
+  });
+  renderMarkers();
+}
+
+$("play").addEventListener("click", togglePlay);
+$("step").addEventListener("click", () => { runner.pause(); landT0 = -Infinity; runner.speed = cps(); runner.step(1); });
+$("reset").addEventListener("click", () => reset(true));
+$("speed").addEventListener("input", () => { runner.speed = cps(); $("speed-out").textContent = `${cps().toLocaleString()}/s`; });
+$("gap").addEventListener("change", () => reset(true));
+$("gap-dec").addEventListener("click", () => { $("gap").value = gapValue() - 1; reset(true); });
+$("gap-inc").addEventListener("click", () => { $("gap").value = gapValue() + 1; reset(true); });
+$("gap-rand").addEventListener("click", () => {
+  let g; do { g = 2 + Math.floor(Math.random() * 18); } while (g === gapValue());
+  $("gap").value = g; reset(true);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === " ") { if (e.target.matches("button")) return; e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); $("step").click(); }
+  else if (e.key === "r" || e.key === "R") reset(true);
+});
+
+// ---------- Checker ----------
+const showGap = (g, note) => {
+  $("gap").value = g;
+  reset(!note, note);
+  if (note) { runner.speed = cps(); runner.play(); }
+  canvas.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+};
+const checker = RL.mountChecker($("checker"), {
+  buttonLabel: `Test gaps 1–${P.GAPS}`,
+  intro: `Try every starting gap from 1 to ${P.GAPS}.`,
+  run: () => program && RL.checkAll(P, program),
+  onBar: g => showGap(g),
+  onReplay: g => showGap(g, `<b>✕ Gap ${g} fails.</b><span>${RL.runCase(P, program, g).text}</span>`),
+});
+
+// ---------- Stage drawing ----------
+const ease = t => t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function currentX(i, now) {
+  const d = draw[i];
+  if (!d) return 0;
+  return lerp(d.from, d.to, ease(d.dur ? (now - d.t0) / d.dur : 1));
+}
+
+let W = 0, H = 0, dpr = 1;
+new ResizeObserver(() => {
+  const r = canvas.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = r.width; H = r.height;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+}).observe(canvas);
+
+function tokens() {
+  const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+  return { surface: v("--surface"), sky: v("--sky"), ink: v("--ink"), ink2: v("--ink-2"), muted: v("--muted"),
+    rule: v("--rule"), ruleStrong: v("--rule-strong"), a: v("--robot-a"), b: v("--robot-b"), good: v("--good"), mono: v("--font-mono") };
+}
+
+function niceStep(cellPx) {
+  for (const s of [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]) if (s * cellPx >= 44) return s;
+  return 100000;
+}
+
+function canopy(x, y, w, h, color, fill) {
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y);
+  ctx.bezierCurveTo(x - w / 2, y - h * 1.35, x + w / 2, y - h * 1.35, x + w / 2, y);
+  const n = 4, seg = w / n;
+  for (let k = 0; k < n; k++) { const x0 = x + w / 2 - k * seg; ctx.quadraticCurveTo(x0 - seg / 2, y - h * 0.28, x0 - seg, y); }
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = color; ctx.stroke();
+}
+
+function robot(x, groundY, w, color, T, label, lift) {
+  const h = w * 1.05, top = groundY - h - w * 0.18 - lift;
+  ctx.fillStyle = T.ink;
+  const wr = Math.max(2, w * 0.13);
+  [-0.26, 0.26].forEach(o => { ctx.beginPath(); ctx.arc(x + o * w, groundY - wr - lift, wr, 0, Math.PI * 2); ctx.fill(); });
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(x - w / 2, top, w, h, Math.max(3, w * 0.22)); ctx.fill();
+  ctx.fillStyle = T.surface;
+  const vw = w * 0.64, vh = h * 0.3, vy = top + h * 0.2;
+  ctx.beginPath(); ctx.roundRect(x - vw / 2, vy, vw, vh, vh / 2); ctx.fill();
+  ctx.fillStyle = T.ink;
+  const er = Math.max(1.2, vh * 0.24);
+  [-0.16, 0.16].forEach(o => { ctx.beginPath(); ctx.arc(x + o * w, vy + vh / 2, er, 0, Math.PI * 2); ctx.fill(); });
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top - w * 0.28); ctx.stroke();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, top - w * 0.32, Math.max(2, w * 0.09), 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = T.ink; ctx.font = `600 12px ${T.mono}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  ctx.fillText(label, x, top - w * 0.45);
+  return top;
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(100, now - (lastFrame || now));
+  lastFrame = now;
+  runner.tick(dt);
+  if (!W) return;
+
+  const T = tokens(), s = sim();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const groundY = H - 58;
+  const g = ctx.createLinearGradient(0, 0, 0, groundY);
+  g.addColorStop(0, T.sky); g.addColorStop(1, T.surface);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, groundY);
+
+  const xs = draw.map((_, i) => currentX(i, now));
+  const chuteCells = s ? [...s.chutes.keys()] : [0, gapValue()];
+  const pts = xs.concat(chuteCells);
+  let lo = Math.min(...pts), hi = Math.max(...pts);
+  const minSpan = Math.max(14, W / 48), pad = Math.max(3, (hi - lo) * 0.12);
+  lo -= pad; hi += pad;
+  if (hi - lo < minSpan) { const c = (lo + hi) / 2; lo = c - minSpan / 2; hi = c + minSpan / 2; }
+  if (!cam) cam = { lo, hi };
+  const k = 1 - Math.exp(-dt / 140);
+  cam.lo = lerp(cam.lo, lo, k); cam.hi = lerp(cam.hi, hi, k);
+
+  const sidePad = 24, cellPx = (W - sidePad * 2) / (cam.hi - cam.lo);
+  const X = c => sidePad + (c - cam.lo) * cellPx;
+
+  ctx.fillStyle = T.surface; ctx.fillRect(0, groundY, W, H - groundY);
+  ctx.strokeStyle = T.ruleStrong; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, groundY + 0.5); ctx.lineTo(W, groundY + 0.5); ctx.stroke();
+  const first = Math.ceil(cam.lo - 1), last = Math.floor(cam.hi + 1), labelStep = niceStep(cellPx);
+  ctx.font = `400 11px ${T.mono}`; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  if (cellPx >= 5) {
+    ctx.strokeStyle = T.rule; ctx.lineWidth = 1; ctx.beginPath();
+    for (let c = first; c <= last; c++) { const x = Math.round(X(c)) + 0.5; ctx.moveTo(x, groundY + 1); ctx.lineTo(x, groundY + 6); }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = T.ruleStrong; ctx.beginPath();
+  for (let c = Math.ceil(first / labelStep) * labelStep; c <= last; c += labelStep) {
+    const x = Math.round(X(c)) + 0.5;
+    ctx.moveTo(x, groundY + 1); ctx.lineTo(x, groundY + 10);
+    ctx.fillStyle = c === 0 ? T.ink2 : T.muted;
+    ctx.fillText(c > 0 ? `+${c}` : String(c), x, groundY + 14);
+  }
+  ctx.stroke();
+
+  const lp = LAND_MS ? clamp((now - landT0) / LAND_MS, 0, 1) : 1;
+  const descend = ease(lp / 0.72), settle = ease((lp - 0.72) / 0.28);
+  const rw = clamp(cellPx * 0.62, 12, 26), cw = clamp(cellPx * 1.0, 18, 36);
+  const skyDrop = Math.max(0, groundY - rw * 4.2 - 54);
+  const colors = [T.a, T.b];
+
+  if (lp >= 0.72) chuteCells.forEach((c, idx) => {
+    const col = colors[s ? s.chutes.get(c) : idx];
+    canopy(X(c), lerp(groundY - rw * 2.3, groundY, settle), lerp(rw * 2.4, cw, settle), lerp(rw * 0.9, cw * 0.32, settle), col, col + "2E");
+  });
+
+  const met = runner.result && runner.result.ok;
+  xs.forEach((x, i) => {
+    const px = X(x) + (met ? (i === 0 ? -1 : 1) * rw * 0.42 : 0);
+    const top = robot(px, groundY, rw, colors[i], T, i === 0 ? "A" : "B", (1 - descend) * skyDrop);
+    if (lp < 0.72) {
+      const cy = top - rw * 1.3, w = rw * 2.4, h = rw * 0.9;
+      ctx.strokeStyle = T.muted; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(px - w / 2, cy); ctx.lineTo(px - rw / 2, top + 2);
+      ctx.moveTo(px + w / 2, cy); ctx.lineTo(px + rw / 2, top + 2);
+      ctx.moveTo(px, cy - 1); ctx.lineTo(px, top);
+      ctx.stroke();
+      canopy(px, cy, w, h, colors[i], colors[i] + "40");
+    }
+  });
+
+  if (met) {
+    ctx.strokeStyle = T.good; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(X(lerp(xs[0], xs[1], 0.5)), groundY - rw * 0.7, rw * 1.6, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (parseErr) {
+    ctx.fillStyle = T.ink2; ctx.font = `500 14px ${T.mono}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("Fix the program to drop the robots", W / 2, groundY / 2 + 10);
+  }
+}
+
+// ---------- Boot ----------
+code.value = store.get() ?? EXAMPLES.starter;
+compile();
+renderEditor();
+reset(true);
+$("speed-out").textContent = `${cps().toLocaleString()}/s`;
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

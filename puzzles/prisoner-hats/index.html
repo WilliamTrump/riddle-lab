@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prisoner Hats · Riddle Lab</title>
+<meta name="description" content="Ten prisoners, black and white hats, one guess each. Play the line yourself or write a strategy and test it on every lineup.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../shared/shell.css">
+<style>
+:root {
+  --hat-black: #1A2129;
+  --hat-white: #F8FAFB;
+  --hat-stroke: #6B7887;
+  --figure: #CBD4DE;
+  --figure-stripe: #B3BFCB;
+  --figure-head: #DCE3EA;
+  --sight: #2F68C8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hat-black: #06090C; --hat-white: #EEF2F5; --hat-stroke: #8C99A8;
+    --figure: #34404C; --figure-stripe: #2A3540; --figure-head: #46525F; --sight: #5B92E5;
+  }
+}
+:root[data-theme="dark"] {
+  --hat-black: #06090C; --hat-white: #EEF2F5; --hat-stroke: #8C99A8;
+  --figure: #34404C; --figure-stripe: #2A3540; --figure-head: #46525F; --sight: #5B92E5;
+}
+
+.stage { overflow: hidden; }
+.stage-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+.line-scroll { overflow-x: auto; padding: 4px 0 2px; }
+#line { display: block; margin: 0 auto; height: auto; }
+#line text { font-family: var(--font-body); }
+.caption { display: flex; justify-content: space-between; gap: 12px; padding: 0 14px 12px; font-size: 12.5px; color: var(--muted); }
+
+.bench { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: 18px; align-items: start; }
+@media (max-width: 880px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+
+.turn h3 { margin: 0; font: 700 19px/1.2 var(--font-display); }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
+.said { display: inline-flex; align-items: center; gap: 5px; font: 500 12.5px var(--font-mono); border: 1px solid var(--rule); border-radius: 6px; padding: 2px 6px; }
+.dot-hat { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--hat-stroke); flex: none; }
+.dot-hat.black { background: var(--hat-black); }
+.dot-hat.white { background: var(--hat-white); }
+.say { display: flex; gap: 8px; flex-wrap: wrap; }
+.say .btn { min-width: 132px; }
+
+.editor-wrap { display: grid; gap: 8px; }
+#strategy {
+  width: 100%; min-height: 320px; resize: vertical; padding: 12px 14px; border: 1px solid var(--rule-strong); border-radius: 8px;
+  background: var(--surface-2); font: 13.5px/1.6 var(--font-mono); white-space: pre; tab-size: 2; overflow-x: auto;
+}
+#strategy:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+
+.history { list-style: none; margin: 0; padding: 0; display: grid; }
+.history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; font-variant-numeric: tabular-nums; }
+.history li:first-child { border-top: 0; }
+.big { font: 700 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.big small { font: 500 14px var(--font-body); color: var(--muted); margin-left: 6px; }
+.error { color: var(--bad); margin: 0; font: 13px/1.5 var(--font-mono); white-space: pre-wrap; }
+.callout .facts { font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="site-bar">
+    <a class="wordmark" href="../../index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--ink)"/><path d="M8 9.5a4 4 0 1 1 5.6 3.7c-.9.4-1.6 1.1-1.6 2.1v.4" stroke="var(--on-ink)" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="18.6" r="1.2" fill="var(--on-ink)"/></svg>Riddle Lab</a>
+    <a class="back" href="../../index.html">All puzzles</a>
+  </nav>
+
+  <section class="intro">
+    <div class="intro-text">
+      <h1>The Prisoner Hats</h1>
+      <p>Ten prisoners stand in a line, each in a black or white hat. They see the hats in front of them, never their own.</p>
+      <ul class="rules">
+        <li>From the back, each says <strong>black</strong> or <strong>white</strong>.</li>
+        <li>Everyone hears every answer.</li>
+        <li>Name your own hat and you go free.</li>
+      </ul>
+      <p class="goal">Plan ahead to save as many as possible, every time.</p>
+    </div>
+    <div class="video" data-video="N5vJSNXPEwA" data-video-title="Can you solve the prisoner hat riddle? (TED-Ed)">
+      <div class="video-frame"></div>
+      <p class="video-note">TED-Ed · The answer is at the end, so pause when told.</p>
+    </div>
+  </section>
+
+  <section class="panel stage" data-sandbox aria-label="The line of prisoners">
+    <div class="stage-head">
+      <span class="status" id="status" data-state="ready" role="status"><span class="dot"></span><span id="status-text">Ready</span></span>
+      <div class="row">
+        <select id="count" aria-label="Number of prisoners"></select>
+        <button class="btn" type="button" id="new-lineup">New hats</button>
+      </div>
+    </div>
+    <div class="line-scroll"><svg id="line" role="img" aria-label="Prisoners standing in a line"></svg></div>
+    <div class="caption"><span>← Back, speaks first</span><span>Front →</span></div>
+    <div class="callout" id="callout" hidden></div>
+  </section>
+
+  <div class="bench">
+    <section class="panel" aria-label="Sandbox">
+      <div class="panel-head">
+        <div class="segmented" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" id="tab-play" aria-selected="true">Play</button>
+          <button type="button" role="tab" id="tab-code" aria-selected="false">Code a strategy</button>
+        </div>
+      </div>
+
+      <div class="panel-body" id="mode-play">
+        <div class="turn" id="turn"></div>
+      </div>
+
+      <div class="panel-body" id="mode-code" hidden>
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+          <div class="segmented" role="tablist" aria-label="Language">
+            <button type="button" role="tab" data-lang="python" aria-selected="true">Python</button>
+            <button type="button" role="tab" data-lang="java" aria-selected="false">Java</button>
+          </div>
+          <select id="preset" aria-label="Start from an example">
+            <option value="">Examples…</option>
+            <option value="black">Everyone says black</option>
+            <option value="pairs">Pass it on, in pairs</option>
+            <option value="blank">Blank</option>
+          </select>
+          </div>
+          <button class="btn primary" type="button" id="run">Run</button>
+        </div>
+        <textarea id="strategy" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Strategy code"></textarea>
+        <p class="error" id="error" hidden></p>
+      </div>
+    </section>
+
+    <div style="display:grid;gap:18px;min-width:0">
+      <section class="panel" id="panel-history" aria-label="Your rounds">
+        <div class="panel-head"><span class="label">Your rounds</span><button class="btn" type="button" id="clear-history">Clear</button></div>
+        <div class="panel-body">
+          <div id="history-best"></div>
+          <ul class="history" id="history"></ul>
+        </div>
+      </section>
+      <section class="panel" id="checker" hidden aria-label="Test every lineup"></section>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Hints">
+    <div class="panel-head"><span class="label">Hints</span></div>
+    <ol class="ladder">
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">1</span><span class="t">Hint 1</span></button>
+        <div class="rung-body" hidden><p>The back prisoner is a coin flip no matter what. But everyone hears their word.</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">2</span><span class="t">Hint 2</span></button>
+        <div class="rung-body" hidden><p>Can one word say something about <em>all</em> the hats at once?</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">3</span><span class="t">Hint 3</span></button>
+        <div class="rung-body" hidden><p>Odd or even.</p></div></li>
+      <li class="rung solution"><button class="rung-btn" type="button"><span class="n">✓</span><span class="t">Solution</span></button>
+        <div class="rung-body" hidden>
+          <p>The back prisoner says “black” if they see an odd number of black hats. Everyone else counts the black hats they see and hear. If that doesn't match odd/even, their own hat is black. 9 of 10 go free, every time.</p>
+          <div><button class="btn" type="button" data-load-solution>Load it</button></div>
+        </div></li>
+    </ol>
+  </section>
+</div>
+
+<script src="../../shared/engine.js"></script>
+<script src="../../shared/shell.js"></script>
+<script src="puzzle.js"></script>
+<script>
+(() => {
+"use strict";
+const RL = window.RiddleLab, P = RL.puzzles["prisoner-hats"];
+const runner = new RL.Runner(P);
+const $ = id => document.getElementById(id);
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+const PRESETS = {
+  python: {
+    black: `# seen:  hats in front of you, nearest first
+# heard: what everyone behind you said
+# return "black" or "white"
+
+def guess(seen, heard):
+    return "black"
+`,
+    pairs: `def guess(seen, heard):
+    me = len(heard)  # 0 = back of the line
+    if me % 2 == 0:
+        return seen[0] if seen else "black"  # tell the next person
+    return heard[me - 1]                     # repeat what I heard
+`,
+    blank: `def guess(seen, heard):
+    ...
+`,
+    solution: `def guess(seen, heard):
+    black = seen.count("black")
+    # back prisoner: is the number of black hats odd?
+    if not heard:
+        return "black" if black % 2 else "white"
+    # everyone else: start from that, flip for each black hat called since
+    odd = heard[0] == "black"
+    for h in heard[1:]:
+        if h == "black":
+            odd = not odd
+    return "black" if (odd + black) % 2 else "white"
+`,
+  },
+  java: {
+    black: `import java.util.*;
+
+class Strategy {
+    // seen:  hats in front of you, nearest first
+    // heard: what everyone behind you said
+    // return "black" or "white"
+    static String guess(List<String> seen, List<String> heard) {
+        return "black";
+    }
+}
+`,
+    pairs: `import java.util.*;
+
+class Strategy {
+    static String guess(List<String> seen, List<String> heard) {
+        int me = heard.size();  // 0 = back of the line
+        if (me % 2 == 0) return seen.isEmpty() ? "black" : seen.get(0);  // tell the next person
+        return heard.get(me - 1);                                        // repeat what I heard
+    }
+}
+`,
+    blank: `import java.util.*;
+
+class Strategy {
+    static String guess(List<String> seen, List<String> heard) {
+        return null;
+    }
+}
+`,
+    solution: `import java.util.*;
+
+class Strategy {
+    static String guess(List<String> seen, List<String> heard) {
+        int black = 0;
+        for (String h : seen) if (h.equals("black")) black++;
+        // back prisoner: is the number of black hats odd?
+        if (heard.isEmpty()) return black % 2 == 1 ? "black" : "white";
+        // everyone else: start from that, flip for each black hat called since
+        boolean odd = heard.get(0).equals("black");
+        for (String h : heard.subList(1, heard.size())) if (h.equals("black")) odd = !odd;
+        return ((odd ? 1 : 0) + black) % 2 == 1 ? "black" : "white";
+    }
+}
+`,
+  },
+};
+
+let n = 10, lineup = P.randomLineup(n), mode = "play", history = [];
+
+// ---------- Drawing the line ----------
+const SLOT = 82, PAD = 46, H = 238;
+
+function hatShape(cx, color, hidden) {
+  const fill = hidden ? "none" : `var(--hat-${color})`, stroke = hidden ? "var(--muted)" : "var(--hat-stroke)";
+  const dash = hidden ? ' stroke-dasharray="3 3"' : "";
+  let s = `<rect x="${cx - 13}" y="74" width="26" height="28" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5"${dash}/>`;
+  s += `<rect x="${cx - 20}" y="100" width="40" height="6" rx="3" fill="${hidden ? "var(--surface)" : fill}" stroke="${stroke}" stroke-width="1.5"${dash}/>`;
+  if (hidden) s += `<text x="${cx}" y="94" text-anchor="middle" font-size="15" font-weight="600" fill="var(--muted)">?</text>`;
+  return s;
+}
+function figure(cx) {
+  let s = `<rect x="${cx - 19}" y="140" width="38" height="58" rx="14" fill="var(--figure)"/>`;
+  for (const y of [152, 164, 176, 188]) s += `<rect x="${cx - 19}" y="${y}" width="38" height="4" fill="var(--figure-stripe)"/>`;
+  s += `<rect x="${cx - 19}" y="140" width="38" height="58" rx="14" fill="none" stroke="var(--rule-strong)"/>`;
+  s += `<circle cx="${cx}" cy="122" r="16" fill="var(--figure-head)" stroke="var(--rule-strong)"/>`;
+  return s + `<circle cx="${cx + 8}" cy="119" r="2" fill="var(--ink)"/>`;
+}
+function bubble(cx, word) {
+  return `<rect x="${cx - 33}" y="14" width="66" height="28" rx="8" fill="var(--surface)" stroke="var(--rule-strong)"/>
+    <path d="M${cx - 6} 41.5 L${cx} 50 L${cx + 6} 41.5" fill="var(--surface)" stroke="var(--rule-strong)"/>
+    <rect x="${cx - 7}" y="40" width="14" height="3" fill="var(--surface)"/>
+    <circle cx="${cx - 18}" cy="28" r="5" fill="var(--hat-${word})" stroke="var(--hat-stroke)"/>
+    <text x="${cx + 5}" y="32.5" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--ink)" font-family="var(--font-mono)">${word}</text>`;
+}
+
+// speaker: highlighted prisoner. hideUpTo: hats 0..hideUpTo are hidden (play mode).
+function render() {
+  const s = runner.state, said = s ? s.guesses : [];
+  const done = !!runner.result;
+  let speaker = -1, hideUpTo = -1, marks = false;
+  if (mode === "play") {
+    if (!done) speaker = hideUpTo = said.length;
+    marks = done;
+  } else {
+    speaker = runner.mistake || runner.playing ? said.length - 1 : -1;
+    marks = true;
+  }
+  const W = PAD * 2 + SLOT * (n - 1), svg = $("line");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W);
+  svg.style.maxWidth = "100%";
+  svg.style.minWidth = `${Math.min(W, n * 52)}px`;
+  const X = i => PAD + i * SLOT;
+  let out = "";
+  if (speaker >= 0 && speaker < n - 1) {
+    const x0 = X(speaker) + SLOT / 2, x1 = X(n - 1) + SLOT / 2 - 6;
+    out += `<rect x="${x0}" y="66" width="${x1 - x0}" height="48" rx="10" fill="var(--sight)" fill-opacity="0.10" stroke="var(--sight)" stroke-opacity="0.35" stroke-dasharray="4 4"/>`;
+    out += `<text x="${x0 + 10}" y="62" font-size="11" fill="var(--sight)" font-weight="600">sees</text>`;
+  }
+  if (speaker >= 0) out += `<rect x="${X(speaker) - SLOT / 2 + 4}" y="58" width="${SLOT - 8}" height="${H - 62}" rx="12" fill="var(--sight)" fill-opacity="0.08"/>`;
+  lineup.forEach((hat, i) => {
+    const cx = X(i);
+    out += figure(cx) + hatShape(cx, hat, i <= hideUpTo);
+    if (said[i]) out += bubble(cx, said[i]);
+    out += `<text x="${cx}" y="218" text-anchor="middle" font-size="12" font-weight="${i === speaker ? 700 : 500}" fill="var(${i === speaker ? "--ink" : "--muted"})" font-family="var(--font-mono)">${i + 1}</text>`;
+    if (marks && said[i]) {
+      const ok = said[i] === hat;
+      out += `<text x="${cx}" y="234" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(${ok ? "--good" : "--bad"})">${ok ? "✓ free" : "✕"}</text>`;
+    }
+  });
+  svg.innerHTML = out;
+}
+
+function setStatus(state, text) { $("status").dataset.state = state; $("status-text").textContent = text; }
+const chip = g => `<span class="said"><span class="dot-hat ${g}"></span>${g}</span>`;
+function factsFor(i) {
+  const seen = P.seenBy(lineup, i), b = seen.filter(h => h === "black").length;
+  const heard = runner.state.guesses.slice(0, i);
+  return `<dl class="facts">
+    <dt>Sees</dt><dd>${seen.length ? `${b} black, ${seen.length - b} white` : "nothing"}</dd>
+    <dt>Heard</dt><dd>${heard.length ? heard.map(chip).join("") : "nothing"}</dd></dl>`;
+}
+
+// ---------- Play mode ----------
+function renderTurn() {
+  const el = $("turn"), r = runner.result;
+  if (r) {
+    el.innerHTML = `<h3>${r.text}</h3>
+      <div class="say" style="margin-top:12px"><button class="btn primary" type="button" id="again">Play again</button></div>`;
+    $("again").addEventListener("click", newLineup);
+    return;
+  }
+  const t = runner.state.guesses.length;
+  el.innerHTML = `<h3>Prisoner ${t + 1}</h3><div style="margin-top:10px">${factsFor(t)}</div>
+    <div class="say" style="margin-top:14px">
+      <button class="btn" type="button" data-say="black"><span class="dot-hat black"></span>Black</button>
+      <button class="btn" type="button" data-say="white"><span class="dot-hat white"></span>White</button>
+    </div>`;
+  el.querySelectorAll("[data-say]").forEach(b => b.addEventListener("click", () => runner.step(1, b.dataset.say)));
+}
+
+function renderHistory() {
+  if (!history.length) {
+    $("history-best").innerHTML = `<p class="hint">Finish a round to see your score.</p>`;
+    $("history").innerHTML = "";
+    return;
+  }
+  const worst = Math.min(...history.map(h => h.k));
+  $("history-best").innerHTML = `<div class="big">${worst}<small>worst round</small></div>`;
+  $("history").innerHTML = history.slice(0, 6).map((h, i) => `<li><span>Round ${history.length - i}</span><span>${h.k} of ${h.n}</span></li>`).join("");
+}
+$("clear-history").addEventListener("click", () => { history = []; renderHistory(); });
+
+// ---------- Code mode ----------
+const code = $("strategy");
+let lang = store.get("riddle-lab:hats:lang") === "java" ? "java" : "python";
+const codeKey = () => `riddle-lab:hats:${lang}`;
+let busy = false;
+
+function showError(msg, line) {
+  $("error").hidden = !msg;
+  $("error").textContent = msg ? (line ? `Line ${line}: ${msg}` : msg) : "";
+  if (msg) setStatus("error", "Strategy error");
+}
+
+// Python runs in a worker (Pyodide) so a stuck strategy can be stopped.
+const python = (() => {
+  const CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+  const SRC = `importScripts("${CDN}pyodide.js");
+const ready = loadPyodide({ indexURL: "${CDN}" });
+const HARNESS = \`
+import json
+def __run_all(lineups_json):
+    out = []
+    for lineup in json.loads(lineups_json):
+        heard = []
+        for i in range(len(lineup)):
+            heard.append(guess(list(lineup[i + 1:]), list(heard)))
+        out.append(heard)
+    return json.dumps(out)
+\`;
+ready.then(() => postMessage({ ready: true }), e => postMessage({ fatal: String(e) }));
+onmessage = async ({ data }) => {
+  try {
+    const py = await ready;
+    const ns = py.globals.get("dict")();
+    py.runPython(data.source, { globals: ns });
+    if (!ns.has("guess")) throw new Error("Write a function: def guess(seen, heard):");
+    py.runPython(HARNESS, { globals: ns });
+    postMessage({ id: data.id, guesses: JSON.parse(ns.get("__run_all")(JSON.stringify(data.lineups))) });
+  } catch (e) {
+    const text = String(e.message || e).trim();
+    // the last frame in the player's code (not the harness) gives the line
+    const frames = [...text.matchAll(/File "<exec>", line (\\d+)(?:, in (\\S+))?/g)];
+    const last = frames[frames.length - 1];
+    const line = last && last[2] !== "__run_all" ? +last[1] : 0;
+    postMessage({ id: data.id, error: text.split("\\n").pop(), line });
+  }
+};`;
+  let worker = null, ready = null, loaded = false, nextId = 0;
+  function start() {
+    worker = new Worker(URL.createObjectURL(new Blob([SRC], { type: "text/javascript" })));
+    const failed = { message: "Python couldn't load. Check your internet connection." };
+    ready = new Promise((res, rej) => {
+      worker.addEventListener("message", function once(e) {
+        if (e.data.ready) { worker.removeEventListener("message", once); loaded = true; res(); }
+        else if (e.data.fatal) rej(failed);
+      });
+      worker.addEventListener("error", () => rej(failed));
+    });
+    ready.catch(() => { worker = null; });
+  }
+  return {
+    warm() { if (!worker) start(); },
+    get loaded() { return loaded; },
+    async run(source, lineups) {
+      if (!worker) start();
+      await ready;
+      const id = ++nextId;
+      return new Promise((res, rej) => {
+        const timer = setTimeout(() => {
+          worker.terminate(); worker = null; loaded = false;
+          rej({ message: "Took longer than 10 seconds. Is there an endless loop?" });
+        }, 10000);
+        worker.addEventListener("message", function on(e) {
+          if (e.data.id !== id) return;
+          worker.removeEventListener("message", on); clearTimeout(timer);
+          e.data.error ? rej({ message: e.data.error, line: e.data.line }) : res(e.data.guesses);
+        });
+        worker.postMessage({ id, source, lineups });
+      });
+    },
+  };
+})();
+
+// Java is compiled and run by server.py with your own javac.
+async function runJava(source, lineups) {
+  const needServer = { message: "Java needs the local server. Run: python3 server.py" };
+  let res;
+  try {
+    res = await fetch("/api/hats/java", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, lineups }) });
+  } catch { throw needServer; }
+  if (!res.ok) throw res.status === 404 || res.status === 501 ? needServer : { message: `The server said ${res.status}.` };
+  const data = await res.json();
+  if (data.error) throw { message: data.error, line: data.line };
+  return data.guesses;
+}
+
+// Run the player's code on these lineups and return a guess(seen, heard) for the engine.
+async function strategyFor(lineups) {
+  if (busy) return null;
+  busy = true; $("run").disabled = true;
+  setStatus("running", lang === "java" ? "Compiling Java…" : python.loaded ? "Running Python…" : "Loading Python…");
+  try {
+    const answers = await (lang === "java" ? runJava : python.run)(code.value, lineups);
+    showError("");
+    setStatus("ready", "Ready");
+    return P.fromGuesses(lineups, answers);
+  } catch (e) {
+    showError(e.message || String(e), e.line);
+    return null;
+  } finally {
+    busy = false; $("run").disabled = false;
+  }
+}
+
+async function runLineup(stopAtMistake = false) {
+  const fn = await strategyFor([lineup]);
+  if (!fn) return;
+  runner.load(fn, lineup, { stopAtMistake });
+  runner.speed = reducedMotion ? 1000 : 2.5;
+  runner.play();
+}
+
+function setLang(l) {
+  lang = l;
+  store.set("riddle-lab:hats:lang", l);
+  document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-selected", b.dataset.lang === l));
+  code.value = store.get(codeKey()) ?? PRESETS[l].black;
+  showError(""); checker.clear();
+  if (l === "python" && mode === "code") python.warm();
+}
+document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
+
+code.addEventListener("input", () => { store.set(codeKey(), code.value); showError(""); checker.clear(); });
+code.addEventListener("keydown", e => {
+  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); code.setRangeText("    ", code.selectionStart, code.selectionEnd, "end"); code.dispatchEvent(new Event("input")); }
+});
+$("preset").addEventListener("change", e => {
+  if (e.target.value) { code.value = PRESETS[lang][e.target.value]; code.dispatchEvent(new Event("input")); }
+  e.target.value = "";
+});
+$("run").addEventListener("click", () => {
+  if (runner.playing) runner.pause();
+  else if (runner.state && runner.state.fn && !runner.finished && runner.state.guesses.length) runner.play();
+  else runLineup();
+});
+document.addEventListener("shell:load-solution", () => {
+  setMode("code");
+  code.value = PRESETS[lang].solution;
+  code.dispatchEvent(new Event("input"));
+});
+
+// ---------- Checker ----------
+const replay = l => {
+  lineup = l.slice();
+  $("line").scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+  runLineup(true);
+};
+const checker = RL.mountChecker($("checker"), {
+  buttonLabel: () => `Test all ${(2 ** n).toLocaleString()} lineups`,
+  intro: "Try every possible lineup.",
+  run: async () => {
+    const fn = await strategyFor(P.cases({ n }));
+    if (!fn) return null;
+    try { return RL.checkAll(P, fn, { n }); } catch (e) { showError(e.message); return null; }
+  },
+  onBar: replay,
+  onReplay: replay,
+});
+
+// ---------- One update for every runner event ----------
+runner.on(() => {
+  render();
+  const r = runner.result, callout = $("callout");
+  callout.hidden = true;
+  if (runner.error) { showError(runner.error.message); return; }
+  if (mode === "play") {
+    renderTurn();
+    if (r) {
+      if (!runner.state.counted) { runner.state.counted = true; history.unshift({ k: r.score, n }); renderHistory(); }
+      setStatus(r.ok ? "good" : "fail", r.text);
+    } else setStatus("running", `Prisoner ${runner.state.guesses.length + 1}'s turn`);
+    return;
+  }
+  $("run").textContent = runner.playing ? "Pause" : "Run";
+  if (runner.mistake) {
+    const i = runner.state.guesses.length - 1;
+    callout.hidden = false;
+    callout.innerHTML = `<div style="display:grid;gap:6px"><b>✕ ${runner.mistake}</b>${factsFor(i)}</div>
+      <button class="btn" type="button" id="keep-going">Keep going</button>`;
+    $("keep-going").addEventListener("click", () => runner.resume());
+    setStatus("fail", `Prisoner ${i + 1} got it wrong`);
+  } else if (r) setStatus(r.ok ? "good" : "fail", r.text);
+  else if (runner.playing) setStatus("running", `Prisoner ${runner.state.guesses.length} spoke`);
+  else if (runner.state.guesses.length) setStatus("paused", "Paused");
+  else setStatus("ready", "Ready");
+});
+
+// ---------- Mode, lineup, count ----------
+function setMode(m) {
+  mode = m;
+  $("tab-play").setAttribute("aria-selected", m === "play");
+  $("tab-code").setAttribute("aria-selected", m === "code");
+  $("mode-play").hidden = m !== "play";
+  $("mode-code").hidden = m !== "code";
+  $("panel-history").hidden = m !== "play";
+  $("checker").hidden = m !== "code";
+  if (m === "code" && lang === "python") python.warm();
+  resetRound();
+}
+$("tab-play").addEventListener("click", () => setMode("play"));
+$("tab-code").addEventListener("click", () => setMode("code"));
+
+function resetRound() { runner.load(null, lineup); }
+function newLineup() { lineup = P.randomLineup(n); resetRound(); }
+$("new-lineup").addEventListener("click", newLineup);
+
+for (let k = 3; k <= 12; k++) $("count").insertAdjacentHTML("beforeend", `<option value="${k}"${k === 10 ? " selected" : ""}>${k} prisoners</option>`);
+$("count").addEventListener("change", e => {
+  n = +e.target.value; checker.clear(); history = []; renderHistory(); newLineup();
+});
+
+let last = 0;
+(function loop(t) { runner.tick(Math.min(100, t - (last || t))); last = t; requestAnimationFrame(loop); })(performance.now());
+
+renderHistory();
+setLang(lang);
+setMode("play");
+})();
+</script>
+</body>
+</html>
