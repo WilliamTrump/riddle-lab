@@ -55,7 +55,7 @@ test("hats: a bad answer names the prisoner", () => {
   const r = new Runner(hats);
   r.load(() => "grey", ["black", "white"]);
   r.step();
-  assert.match(r.error.message, /Prisoner 1/);
+  assert.match(r.error.message, /Prisoner 2/);  // back of a 2-prisoner line
 });
 
 test("hats: answers from Python or Java become a strategy that replays the same", () => {

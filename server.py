@@ -14,8 +14,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
+import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -28,6 +30,9 @@ ORIGINS = {f"http://{h}" for h in HOSTS}
 MAX_BODY = 300_000
 MAX_LINEUPS = 4096
 RUN_SECONDS = 10
+MAX_OUTPUT_BLOCKS = 4096   # 2 MB of output (ulimit counts 512-byte blocks)
+KEEP_BUILDS = 30
+RUNS_AT_ONCE = threading.BoundedSemaphore(2)
 
 
 class JavaError(Exception):
@@ -36,24 +41,56 @@ class JavaError(Exception):
         self.line = line
 
 
+def run_limited(cmd: list[str], cwd: Path, timeout: int, stdin: str = "") -> tuple[int, str, str]:
+    """Run cmd with a time limit and an output cap. Everything it starts is killed afterwards."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out_path, err_path = Path(tmp) / "out", Path(tmp) / "err"
+        with open(out_path, "w") as out, open(err_path, "w") as err:
+            # ulimit -f caps how much the program can write, so it can't fill the disk or our memory
+            proc = subprocess.Popen(
+                ["/bin/sh", "-c", f'ulimit -f {MAX_OUTPUT_BLOCKS}; exec "$@"', "sh", *cmd],
+                cwd=cwd, stdin=subprocess.PIPE, stdout=out, stderr=err, text=True,
+                start_new_session=True,  # its own process group, so we can kill children too
+            )
+            try:
+                proc.communicate(stdin, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                raise JavaError(f"Took longer than {timeout} seconds. Is there an endless loop?")
+            finally:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                proc.wait()
+        if proc.returncode == -signal.SIGXFSZ or proc.returncode == 128 + signal.SIGXFSZ:
+            raise JavaError("Printed too much output.")
+        return proc.returncode, out_path.read_text(errors="replace"), err_path.read_text(errors="replace")
+
+
+def prune_builds() -> None:
+    """Keep only the most recent builds so the temp folder doesn't grow forever."""
+    builds = sorted((d for d in BUILD.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)
+    for old in builds[KEEP_BUILDS:]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def compile_java(source: str) -> Path:
     """Compile the strategy with the harness, reusing earlier builds of the same source."""
     harness = HARNESS.read_text()
     key = hashlib.sha256((source + harness).encode()).hexdigest()[:16]
     out = BUILD / key / "out"
     if (out / "Main.class").exists():
+        os.utime(BUILD / key)  # mark as recently used
         return out
     src = BUILD / key / "src"
     src.mkdir(parents=True, exist_ok=True)
     (src / "Strategy.java").write_text(source)
     (src / "Main.java").write_text(harness)
-    proc = subprocess.run(
-        ["javac", "-nowarn", "-d", str(out), "Strategy.java", "Main.java"],
-        cwd=src, capture_output=True, text=True, timeout=60,
-    )
-    if proc.returncode != 0:
+    code, _, stderr = run_limited(["javac", "-nowarn", "-d", str(out), "Strategy.java", "Main.java"], src, timeout=60)
+    if code != 0:
         shutil.rmtree(out, ignore_errors=True)
-        raise compile_error(proc.stderr)
+        raise compile_error(stderr)
+    prune_builds()
     return out
 
 
@@ -70,18 +107,16 @@ def compile_error(stderr: str) -> JavaError:
 def run_java(source: str, lineups: list[list[str]]) -> list[list[str]]:
     out = compile_java(source)
     stdin = "".join("\t".join(l) + "\n" for l in lineups)
-    try:
-        proc = subprocess.run(
-            ["java", "-Xmx256m", "-cp", str(out), "Main"],
-            input=stdin, capture_output=True, text=True, timeout=RUN_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        raise JavaError(f"Took longer than {RUN_SECONDS} seconds. Is there an endless loop?")
-    if proc.returncode != 0:
-        first = next((l for l in proc.stderr.splitlines() if l.startswith("Exception")), proc.stderr.strip())
-        line = re.search(r"Strategy\.java:(\d+)", proc.stderr)
+    code, stdout, stderr = run_limited(["java", "-Xmx256m", "-cp", str(out), "Main"], out, RUN_SECONDS, stdin)
+    if code != 0:
+        first = next((l for l in stderr.splitlines() if l.startswith("Exception")), stderr.strip() or "The program stopped early.")
+        line = re.search(r"Strategy\.java:(\d+)", stderr)
         raise JavaError(first.replace('Exception in thread "main" ', ""), int(line.group(1)) if line else 0)
-    return [l.split("\t") for l in proc.stdout.splitlines()]
+    answers = [l.split("\t") for l in stdout.splitlines()]
+    # e.g. System.exit() part way through
+    if len(answers) != len(lineups) or any(len(a) != len(l) for a, l in zip(answers, lineups)):
+        raise JavaError("The program stopped before every prisoner answered.")
+    return answers
 
 
 def valid_lineups(value) -> bool:
@@ -117,12 +152,20 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError
         except (KeyError, ValueError, TypeError):
             return self.send_error(400)
+        if not RUNS_AT_ONCE.acquire(timeout=20):
+            result = {"error": "The server is busy. Try again in a moment."}
+            return self.reply(result)
         try:
             result = {"guesses": run_java(source, lineups)}
         except JavaError as e:
             result = {"error": str(e), "line": e.line}
         except FileNotFoundError:
             result = {"error": "Java isn't installed on this computer (javac not found)."}
+        finally:
+            RUNS_AT_ONCE.release()
+        self.reply(result)
+
+    def reply(self, result: dict) -> None:
         data = json.dumps(result).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

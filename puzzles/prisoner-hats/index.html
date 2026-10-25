@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../../shared/shell.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <style>
 :root {
   --hat-black: #1A2129;
@@ -65,6 +66,33 @@
 .big small { font: 500 14px var(--font-body); color: var(--muted); margin-left: 6px; }
 .error { color: var(--bad); margin: 0; font: 13px/1.5 var(--font-mono); white-space: pre-wrap; }
 .callout .facts { font-size: 13px; }
+/* Code editor (CodeMirror) in Riddle Lab colors */
+:root { --syn-keyword: #7A45B5; --syn-def: #2F68C8; --syn-string: #1E7F47; --syn-number: #B5541C; --syn-builtin: #0E7383; --syn-type: #A2366F; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
+}
+:root[data-theme="dark"] { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
+.cm-s-riddle.CodeMirror {
+  height: 340px; border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden;
+  background: var(--surface-2); color: var(--ink); font: 13.5px/1.6 var(--font-mono);
+}
+.cm-s-riddle.CodeMirror-focused { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.cm-s-riddle .CodeMirror-gutters { background: var(--surface-2); border-right: 1px solid var(--rule); }
+.cm-s-riddle .CodeMirror-linenumber { color: var(--muted); padding: 0 10px 0 8px; }
+.cm-s-riddle .CodeMirror-cursor { border-left: 2px solid var(--ink); }
+.cm-s-riddle .CodeMirror-selected, .cm-s-riddle.CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--focus) 24%, transparent); }
+.cm-s-riddle .CodeMirror-lines { padding: 10px 0; }
+.cm-s-riddle .cm-keyword { color: var(--syn-keyword); font-weight: 600; }
+.cm-s-riddle .cm-def { color: var(--syn-def); font-weight: 500; }
+.cm-s-riddle .cm-string, .cm-s-riddle .cm-string-2 { color: var(--syn-string); }
+.cm-s-riddle .cm-number, .cm-s-riddle .cm-atom { color: var(--syn-number); }
+.cm-s-riddle .cm-comment { color: var(--muted); font-style: italic; }
+.cm-s-riddle .cm-builtin, .cm-s-riddle .cm-meta { color: var(--syn-builtin); }
+.cm-s-riddle .cm-type, .cm-s-riddle .cm-variable-3 { color: var(--syn-type); }
+.cm-s-riddle .cm-operator, .cm-s-riddle .cm-bracket { color: var(--ink-2); }
+.cm-s-riddle .cm-variable, .cm-s-riddle .cm-variable-2, .cm-s-riddle .cm-property { color: var(--ink); }
+.cm-s-riddle .CodeMirror-matchingbracket { color: var(--ink) !important; background: color-mix(in srgb, var(--focus) 20%, transparent); text-decoration: none; }
+.cm-s-riddle .cm-error-line { background: color-mix(in srgb, var(--bad) 15%, transparent); }
 </style>
 </head>
 <body>
@@ -168,6 +196,11 @@
   </section>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="../../shared/engine.js"></script>
 <script src="../../shared/shell.js"></script>
 <script src="puzzle.js"></script>
@@ -319,7 +352,7 @@ function render() {
     const cx = X(i);
     out += figure(cx) + hatShape(cx, hat, i <= hideUpTo);
     if (said[i]) out += bubble(cx, said[i]);
-    out += `<text x="${cx}" y="218" text-anchor="middle" font-size="12" font-weight="${i === speaker ? 700 : 500}" fill="var(${i === speaker ? "--ink" : "--muted"})" font-family="var(--font-mono)">${i + 1}</text>`;
+    out += `<text x="${cx}" y="218" text-anchor="middle" font-size="12" font-weight="${i === speaker ? 700 : 500}" fill="var(${i === speaker ? "--ink" : "--muted"})" font-family="var(--font-mono)">${n - i}</text>`;
     if (marks && said[i]) {
       const ok = said[i] === hat;
       out += `<text x="${cx}" y="234" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(${ok ? "--good" : "--bad"})">${ok ? "✓ free" : "✕"}</text>`;
@@ -348,7 +381,7 @@ function renderTurn() {
     return;
   }
   const t = runner.state.guesses.length;
-  el.innerHTML = `<h3>Prisoner ${t + 1}</h3><div style="margin-top:10px">${factsFor(t)}</div>
+  el.innerHTML = `<h3>Prisoner ${n - t}</h3><div style="margin-top:10px">${factsFor(t)}</div>
     <div class="say" style="margin-top:14px">
       <button class="btn" type="button" data-say="black"><span class="dot-hat black"></span>Black</button>
       <button class="btn" type="button" data-say="white"><span class="dot-hat white"></span>White</button>
@@ -369,14 +402,39 @@ function renderHistory() {
 $("clear-history").addEventListener("click", () => { history = []; renderHistory(); });
 
 // ---------- Code mode ----------
-const code = $("strategy");
 let lang = store.get("riddle-lab:hats:lang") === "java" ? "java" : "python";
 const codeKey = () => `riddle-lab:hats:${lang}`;
 let busy = false;
 
+// The editor: CodeMirror (indentation, colors, brackets) when it loads, else the plain text box.
+const textarea = $("strategy");
+const MODES = { python: { name: "python", version: 3 }, java: "text/x-java" };
+const cm = window.CodeMirror ? CodeMirror.fromTextArea(textarea, {
+  theme: "riddle", mode: MODES[lang], lineNumbers: true, indentUnit: 4, tabSize: 4,
+  matchBrackets: true, autoCloseBrackets: true, electricChars: true,
+  extraKeys: {
+    Tab: c => c.somethingSelected() ? c.indentSelection("add") : c.replaceSelection(" ".repeat(c.getOption("indentUnit")), "end"),
+    "Shift-Tab": c => c.indentSelection("subtract"),
+  },
+}) : null;
+const editor = {
+  get: () => (cm ? cm.getValue() : textarea.value),
+  set(v) {
+    if (cm) { cm.setValue(v); cm.clearHistory(); }   // setValue fires "change"
+    else { textarea.value = v; onEdit(); }
+  },
+};
+let errMark = null;
+function markErrorLine(line) {
+  if (!cm) return;
+  if (errMark) { cm.removeLineClass(errMark, "background", "cm-error-line"); errMark = null; }
+  if (line > 0 && line <= cm.lineCount()) errMark = cm.addLineClass(line - 1, "background", "cm-error-line");
+}
+
 function showError(msg, line) {
   $("error").hidden = !msg;
   $("error").textContent = msg ? (line ? `Line ${line}: ${msg}` : msg) : "";
+  markErrorLine(msg ? line : 0);
   if (msg) setStatus("error", "Strategy error");
 }
 
@@ -469,7 +527,7 @@ async function strategyFor(lineups) {
   busy = true; $("run").disabled = true;
   setStatus("running", lang === "java" ? "Compiling Java…" : python.loaded ? "Running Python…" : "Loading Python…");
   try {
-    const answers = await (lang === "java" ? runJava : python.run)(code.value, lineups);
+    const answers = await (lang === "java" ? runJava : python.run)(editor.get(), lineups);
     showError("");
     setStatus("ready", "Ready");
     return P.fromGuesses(lineups, answers);
@@ -493,18 +551,23 @@ function setLang(l) {
   lang = l;
   store.set("riddle-lab:hats:lang", l);
   document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-selected", b.dataset.lang === l));
-  code.value = store.get(codeKey()) ?? PRESETS[l].black;
+  if (cm) cm.setOption("mode", MODES[l]);
+  editor.set(store.get(codeKey()) ?? PRESETS[l].black);
   showError(""); checker.clear();
   if (l === "python" && mode === "code") python.warm();
 }
 document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
 
-code.addEventListener("input", () => { store.set(codeKey(), code.value); showError(""); checker.clear(); });
-code.addEventListener("keydown", e => {
-  if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); code.setRangeText("    ", code.selectionStart, code.selectionEnd, "end"); code.dispatchEvent(new Event("input")); }
-});
+function onEdit() { store.set(codeKey(), editor.get()); showError(""); checker.clear(); }
+if (cm) cm.on("change", onEdit);
+else {
+  textarea.addEventListener("input", onEdit);
+  textarea.addEventListener("keydown", e => {
+    if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); textarea.setRangeText("    ", textarea.selectionStart, textarea.selectionEnd, "end"); onEdit(); }
+  });
+}
 $("preset").addEventListener("change", e => {
-  if (e.target.value) { code.value = PRESETS[lang][e.target.value]; code.dispatchEvent(new Event("input")); }
+  if (e.target.value) editor.set(PRESETS[lang][e.target.value]);
   e.target.value = "";
 });
 $("run").addEventListener("click", () => {
@@ -514,8 +577,7 @@ $("run").addEventListener("click", () => {
 });
 document.addEventListener("shell:load-solution", () => {
   setMode("code");
-  code.value = PRESETS[lang].solution;
-  code.dispatchEvent(new Event("input"));
+  editor.set(PRESETS[lang].solution);
 });
 
 // ---------- Checker ----------
@@ -547,7 +609,7 @@ runner.on(() => {
     if (r) {
       if (!runner.state.counted) { runner.state.counted = true; history.unshift({ k: r.score, n }); renderHistory(); }
       setStatus(r.ok ? "good" : "fail", r.text);
-    } else setStatus("running", `Prisoner ${runner.state.guesses.length + 1}'s turn`);
+    } else setStatus("running", `Prisoner ${n - runner.state.guesses.length}'s turn`);
     return;
   }
   $("run").textContent = runner.playing ? "Pause" : "Run";
@@ -557,9 +619,9 @@ runner.on(() => {
     callout.innerHTML = `<div style="display:grid;gap:6px"><b>✕ ${runner.mistake}</b>${factsFor(i)}</div>
       <button class="btn" type="button" id="keep-going">Keep going</button>`;
     $("keep-going").addEventListener("click", () => runner.resume());
-    setStatus("fail", `Prisoner ${i + 1} got it wrong`);
+    setStatus("fail", `Prisoner ${n - i} got it wrong`);
   } else if (r) setStatus(r.ok ? "good" : "fail", r.text);
-  else if (runner.playing) setStatus("running", `Prisoner ${runner.state.guesses.length} spoke`);
+  else if (runner.playing) setStatus("running", `Prisoner ${n - runner.state.guesses.length + 1} spoke`);
   else if (runner.state.guesses.length) setStatus("paused", "Paused");
   else setStatus("ready", "Ready");
 });
@@ -573,6 +635,7 @@ function setMode(m) {
   $("mode-code").hidden = m !== "code";
   $("panel-history").hidden = m !== "play";
   $("checker").hidden = m !== "code";
+  if (m === "code" && cm) cm.refresh();   // it was sized while hidden
   if (m === "code" && lang === "python") python.warm();
   resetRound();
 }

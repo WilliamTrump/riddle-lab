@@ -73,7 +73,7 @@ def play(lineup: Sequence[str], strategy: Strategy) -> list[str]:
     for i in range(len(lineup)):
         g = strategy(tuple(lineup[i + 1:]), tuple(heard))
         if g not in (BLACK, WHITE):
-            raise ValueError(f"prisoner {i + 1} said {g!r}; return 'black' or 'white'")
+            raise ValueError(f"prisoner {len(lineup) - i} said {g!r}; return 'black' or 'white'")
         heard.append(g)
     return heard
 

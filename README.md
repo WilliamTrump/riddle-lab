@@ -72,8 +72,13 @@ the page) and Java through `server.py`, which compiles with `javac` and caches
 builds. The answers come back as a table that the engine replays.
 
 **Server safety.** `server.py` listens only on `127.0.0.1` and only accepts JSON
-from its own pages, so other websites can't use it to run code. It's meant for
-your own machine, not the open internet.
+from its own pages, so other websites can't use it to run code. Java runs get a
+time limit, an output cap, at most two at once, and everything they start is
+killed afterwards. It's meant for your own machine, not the open internet:
+Java code still runs with your permissions.
+
+**Editor.** The strategy editor is [CodeMirror 5](https://codemirror.net/5/)
+with Python and Java modes: auto-indent, keyword colors, bracket matching.
 
 ## Tests
 

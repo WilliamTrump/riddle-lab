@@ -1,5 +1,6 @@
 // Prisoner Hats: rules only. Mirrors prisoner_hats.py.
 // lineup[0] is the back of the line (speaks first); lineup[n - 1] is the front.
+// Prisoners are numbered from the front: the back prisoner is n, the front one is 1.
 (function (root, make) {
   if (typeof module === "object" && module.exports) module.exports = make(require("../../shared/engine.js"));
   else (root.RiddleLab.puzzles = root.RiddleLab.puzzles || {})["prisoner-hats"] = make(root.RiddleLab);
@@ -29,9 +30,9 @@
     let g = input;
     if (g === undefined) {
       try { g = s.fn(Object.freeze(seenBy(s.lineup, i)), Object.freeze(s.guesses.slice())); }
-      catch (e) { throw new ProgramError(`Prisoner ${i + 1}: ${e.message}`); }
+      catch (e) { throw new ProgramError(`Prisoner ${s.lineup.length - i}: ${e.message}`); }
     }
-    if (g !== "black" && g !== "white") throw new ProgramError(`Prisoner ${i + 1} said ${JSON.stringify(g)}. Return "black" or "white".`);
+    if (g !== "black" && g !== "white") throw new ProgramError(`Prisoner ${s.lineup.length - i} said ${JSON.stringify(g)}. Return "black" or "white".`);
     s.guesses.push(g);
   }
 
@@ -46,7 +47,7 @@
   function mistake(s) {
     const i = s.guesses.length - 1;
     if (i < 1 || s.guesses[i] === s.lineup[i]) return null;
-    return `Prisoner ${i + 1} said ${s.guesses[i]} but wore ${s.lineup[i]}.`;
+    return `Prisoner ${s.lineup.length - i} said ${s.guesses[i]} but wore ${s.lineup[i]}.`;
   }
 
   function cases({ n = 10 } = {}) {
