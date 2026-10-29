@@ -23,16 +23,65 @@ from pathlib import Path
 
 PORT = int(os.environ.get("PORT", 8137))
 ROOT = Path(__file__).resolve().parent
-HARNESS = ROOT / "puzzles" / "prisoner-hats" / "java" / "Main.java"
 BUILD = Path(tempfile.gettempdir()) / "riddle-lab-java"
 HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 ORIGINS = {f"http://{h}" for h in HOSTS}
 MAX_BODY = 300_000
-MAX_LINEUPS = 4096
 RUN_SECONDS = 10
 MAX_OUTPUT_BLOCKS = 4096   # 2 MB of output (ulimit counts 512-byte blocks)
 KEEP_BUILDS = 30
 RUNS_AT_ONCE = threading.BoundedSemaphore(2)
+
+
+def hats_ok(cases) -> bool:
+    return (
+        isinstance(cases, list) and 0 < len(cases) <= 4096
+        and all(isinstance(l, list) and 0 < len(l) <= 12 and all(h in ("black", "white") for h in l) for l in cases)
+    )
+
+
+def hats_read(stdout: str, cases) -> list:
+    answers = [l.split("\t") for l in stdout.splitlines()]
+    if len(answers) != len(cases) or any(len(a) != len(l) for a, l in zip(answers, cases)):
+        raise JavaError("The program stopped before every prisoner answered.")
+    return answers
+
+
+def eggdrop_ok(cases) -> bool:
+    return (
+        isinstance(cases, list) and 0 < len(cases) <= 512
+        and all(isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 100 for c in cases)
+    )
+
+
+def eggdrop_read(stdout: str, cases) -> list:
+    try:
+        rows = [[int(f) for f in line.split("\t")] for line in stdout.splitlines()]
+    except ValueError:
+        raise JavaError("The program printed something that isn't a floor.")
+    if len(rows) != len(cases) or not all(rows):
+        raise JavaError("The program stopped before every floor was tried.")
+    return rows
+
+
+# Each puzzle: its harness (Main.java), how to check the cases, how to write them
+# to the harness, how to read its answers, and the method the player must write.
+PUZZLES = {
+    "hats": {
+        "harness": ROOT / "puzzles" / "prisoner-hats" / "java" / "Main.java",
+        "ok": hats_ok,
+        "write": lambda cases: "".join("\t".join(l) + "\n" for l in cases),
+        "read": hats_read,
+        "signature": "static String guess(List<String> seen, List<String> heard)",
+    },
+    "eggdrop": {
+        "harness": ROOT / "puzzles" / "egg-drop" / "java" / "Main.java",
+        "ok": eggdrop_ok,
+        "write": lambda cases: "".join(f"{c}\n" for c in cases),
+        "read": eggdrop_read,
+        "signature": "static int nextDrop(int safe, int broken, int eggs)",
+    },
+}
 
 
 class JavaError(Exception):
@@ -74,9 +123,9 @@ def prune_builds() -> None:
         shutil.rmtree(old, ignore_errors=True)
 
 
-def compile_java(source: str) -> Path:
+def compile_java(puzzle: dict, source: str) -> Path:
     """Compile the strategy with the harness, reusing earlier builds of the same source."""
-    harness = HARNESS.read_text()
+    harness = puzzle["harness"].read_text()
     key = hashlib.sha256((source + harness).encode()).hexdigest()[:16]
     out = BUILD / key / "out"
     if (out / "Main.class").exists():
@@ -89,41 +138,29 @@ def compile_java(source: str) -> Path:
     code, _, stderr = run_limited(["javac", "-nowarn", "-d", str(out), "Strategy.java", "Main.java"], src, timeout=60)
     if code != 0:
         shutil.rmtree(out, ignore_errors=True)
-        raise compile_error(stderr)
+        raise compile_error(stderr, puzzle["signature"])
     prune_builds()
     return out
 
 
-def compile_error(stderr: str) -> JavaError:
+def compile_error(stderr: str, signature: str) -> JavaError:
     m = re.search(r"^(Strategy|Main)\.java:(\d+): error: (.+)$", stderr, re.M)
     if not m:
         return JavaError(stderr.strip().splitlines()[0] if stderr.strip() else "javac failed.")
     if m.group(1) == "Main":
         # the harness couldn't call the strategy, so the method signature is wrong
-        return JavaError("Write a method: static String guess(List<String> seen, List<String> heard) in class Strategy.")
+        return JavaError(f"Write {signature} in class Strategy.")
     return JavaError(m.group(3), int(m.group(2)))
 
 
-def run_java(source: str, lineups: list[list[str]]) -> list[list[str]]:
-    out = compile_java(source)
-    stdin = "".join("\t".join(l) + "\n" for l in lineups)
-    code, stdout, stderr = run_limited(["java", "-Xmx256m", "-cp", str(out), "Main"], out, RUN_SECONDS, stdin)
+def run_java(puzzle: dict, source: str, cases: list) -> list:
+    out = compile_java(puzzle, source)
+    code, stdout, stderr = run_limited(["java", "-Xmx256m", "-cp", str(out), "Main"], out, RUN_SECONDS, puzzle["write"](cases))
     if code != 0:
         first = next((l for l in stderr.splitlines() if l.startswith("Exception")), stderr.strip() or "The program stopped early.")
         line = re.search(r"Strategy\.java:(\d+)", stderr)
         raise JavaError(first.replace('Exception in thread "main" ', ""), int(line.group(1)) if line else 0)
-    answers = [l.split("\t") for l in stdout.splitlines()]
-    # e.g. System.exit() part way through
-    if len(answers) != len(lineups) or any(len(a) != len(l) for a, l in zip(answers, lineups)):
-        raise JavaError("The program stopped before every prisoner answered.")
-    return answers
-
-
-def valid_lineups(value) -> bool:
-    return (
-        isinstance(value, list) and 0 < len(value) <= MAX_LINEUPS
-        and all(isinstance(l, list) and 0 < len(l) <= 12 and all(h in ("black", "white") for h in l) for l in value)
-    )
+    return puzzle["read"](stdout, cases)  # e.g. after System.exit() part way through, this raises
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -131,7 +168,9 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def do_POST(self):
-        if self.path != "/api/hats/java":
+        m = re.fullmatch(r"/api/([a-z]+)/java", self.path)
+        puzzle = PUZZLES.get(m.group(1)) if m else None
+        if not puzzle:
             return self.send_error(404)
         # Only pages from this server may run code: right host, right origin, JSON only
         # (the JSON content type also makes other sites' browsers ask first, and we never say yes).
@@ -147,8 +186,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(413)
         try:
             body = json.loads(self.rfile.read(length))
-            source, lineups = body["source"], body["lineups"]
-            if not isinstance(source, str) or not valid_lineups(lineups):
+            source, cases = body["source"], body["cases"]
+            if not isinstance(source, str) or not puzzle["ok"](cases):
                 raise ValueError
         except (KeyError, ValueError, TypeError):
             return self.send_error(400)
@@ -156,7 +195,7 @@ class Handler(SimpleHTTPRequestHandler):
             result = {"error": "The server is busy. Try again in a moment."}
             return self.reply(result)
         try:
-            result = {"guesses": run_java(source, lineups)}
+            result = {"result": run_java(puzzle, source, cases)}
         except JavaError as e:
             result = {"error": str(e), "line": e.line}
         except FileNotFoundError:

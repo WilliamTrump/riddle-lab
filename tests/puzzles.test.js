@@ -63,3 +63,73 @@ test("hats: answers from Python or Java become a strategy that replays the same"
   const answers = lineups.map(l => { const s = hats.start(strategy("parity"), l); while (!hats.result(s)) hats.step(s); return s.guesses; });
   assert.ok(checkAll(hats, hats.fromGuesses(lineups, answers), { n: 8 }).ok);
 });
+
+const eggs = require("../puzzles/egg-drop/puzzle.js");
+const EGG = {
+  one: safe => safe + 1,
+  tens: (safe, broken, n) => (n === 2 ? Math.min(safe + 10, broken - 1) : safe + 1),
+  shrinking: (safe, broken, n) => {
+    if (n === 1) return safe + 1;
+    let floor = 0, gap = 14;
+    while (floor <= safe) { floor += gap; gap--; }
+    return Math.min(floor, 100);
+  },
+};
+
+test("eggs: worst cases match the Python version (100, 19, 14)", () => {
+  assert.strictEqual(checkAll(eggs, EGG.one).worst, 100);
+  const tens = checkAll(eggs, EGG.tens);
+  assert.ok(!tens.ok);
+  assert.strictEqual(tens.worst, 19);
+  const v = checkAll(eggs, EGG.shrinking);
+  assert.ok(v.ok);
+  assert.strictEqual(v.worst, 14);
+  assert.strictEqual(v.bars.length, 101);
+});
+
+test("eggs: the best plan with two eggs and 100 floors is 14 drops", () => {
+  assert.strictEqual(eggs.BEST, 14);
+  assert.strictEqual(eggs.minDrops(2, 10), 4);   // the video's 10-floor example: 4, 7, 9
+  assert.strictEqual(eggs.minDrops(1, 37), 37);
+});
+
+test("eggs: replaying a too-slow plan stops at drop 15", () => {
+  const v = checkAll(eggs, EGG.tens);
+  const r = new Runner(eggs);
+  r.load(EGG.tens, v.failing, { stopAtMistake: true });
+  r.step(200);
+  assert.strictEqual(r.state.drops.length, 15);
+  assert.match(r.mistake, /never needs more than 14/);
+});
+
+test("eggs: skipping floors with one egg left can lose both eggs", () => {
+  const v = checkAll(eggs, (safe, broken, n) => (n === 2 ? Math.min(safe + 10, broken - 1) : Math.min(safe + 2, broken - 1)));
+  assert.ok(!v.ok);
+  assert.match(v.headline, /Both eggs broke/);
+});
+
+test("eggs: a floor that's already known is an error", () => {
+  const r = new Runner(eggs);
+  r.load(() => 50, { crit: 70 });
+  r.step(2);
+  assert.match(r.error.message, /already known to be safe/);
+});
+
+test("eggs: the unlucky museum makes the best plan use all 14 drops", () => {
+  const r = new Runner(eggs);
+  r.load(EGG.shrinking, { unlucky: true });
+  r.step(200);
+  assert.ok(r.result.ok);
+  assert.strictEqual(r.state.drops.length, 14);
+  r.load(EGG.tens, { unlucky: true });
+  r.step(200);
+  assert.ok(r.state.drops.length > 14);
+});
+
+test("eggs: answers from Python or Java replay the same", () => {
+  const crits = eggs.cases().map(c => c.crit);
+  const answers = crits.map(crit => { const s = eggs.start(EGG.shrinking, { crit }); while (!eggs.result(s)) eggs.step(s); return s.drops.map(d => d.floor); });
+  const v = checkAll(eggs, eggs.fromAnswers(crits, answers));
+  assert.ok(v.ok);
+  assert.strictEqual(v.worst, 14);
+});

@@ -11,6 +11,7 @@ it breaks.
 | | Puzzle | What you do |
 |---|---|---|
 | 🎩 | **The Prisoner Hats** | Ten prisoners, black and white hats, one word each. Play the line yourself, or write a strategy in **Python** or **Java** and test it on all 1,024 lineups. Includes the TED-Ed video. |
+| 🥚 | **The Egg Drop** | A 100-story museum and two replica eggs: find the highest floor an egg survives in as few drops as possible. Drop eggs by hand (try the unlucky museum), or code `next_drop` in **Python** or **Java** and test all 101 floors. Includes the TED-Ed video. |
 | 🪂 | **Parachuting Robots** | Two robots on an endless line run the same tiny program. Write the code that makes them meet, step through it, and test every starting gap. |
 
 ## Features
@@ -19,7 +20,7 @@ it breaks.
 - **Does it always work?** One click runs your strategy on every case and charts the results.
 - **Show me where it fails.** The checker finds the failing case, replays it, and stops on the exact mistake ("Prisoner 4 said white but wore black").
 - **Hints in steps.** Three nudges before the solution, each opened only when you ask.
-- **Real languages.** Hat strategies run as real Python (Pyodide, in the browser) or real Java (compiled by your JDK through the local server).
+- **Real languages.** Hat and egg drop strategies run as real Python (Pyodide, in the browser) or real Java (compiled by your JDK through the local server).
 
 <p>
   <img src="docs/parachuting-robots.png" alt="Parachuting robots sandbox" width="49%">
@@ -59,10 +60,11 @@ server.py                     local server: static files + Java runner
 shared/engine.js              puzzle interface, Runner, checkAll (browser + Node)
 shared/shell.js               video, hint ladder, checker with failing-case replay
 shared/shell.css              shared look, light and dark
+shared/strategy-lab.js        Python worker, Java client and code editor for coded strategies
 puzzles/<name>/puzzle.js      a puzzle's rules, no page code
 puzzles/<name>/index.html     intro, sandbox view, hints
 puzzles/<name>/*.py           the same logic in Python, with a CLI and tests
-puzzles/prisoner-hats/java/   harness that runs a Java Strategy on every lineup
+puzzles/*/java/Main.java      harness that runs a Java Strategy on every case
 tests/                        engine and puzzle tests
 ```
 
@@ -83,9 +85,10 @@ with Python and Java modes: auto-indent, keyword colors, bracket matching.
 ## Tests
 
 ```sh
-node --test tests/*.test.js                          # engine + both puzzles
+node --test tests/*.test.js                          # engine + every puzzle
 cd puzzles/prisoner-hats && python3 -m pytest        # Python versions
 cd puzzles/parachuting-robots && python3 -m pytest
+cd puzzles/egg-drop && python3 -m pytest
 ```
 
 The JavaScript and Python versions of each puzzle are checked against the same
@@ -93,11 +96,12 @@ expected results.
 
 ## Command line
 
-Both puzzles also work from the terminal:
+Every puzzle also works from the terminal:
 
 ```sh
 python3 puzzles/parachuting-robots/parachuting_robots.py puzzles/parachuting-robots/examples/naive.robot
 python3 puzzles/prisoner-hats/prisoner_hats.py --show 2
+python3 puzzles/egg-drop/egg_drop.py --show 98
 ```
 
 ## Adding a puzzle
@@ -110,5 +114,6 @@ python3 puzzles/prisoner-hats/prisoner_hats.py --show 2
 ## Credits
 
 - Prisoner hat riddle video: [“Can you solve the prisoner hat riddle?”](https://www.youtube.com/watch?v=N5vJSNXPEwA) by Alex Gendler, TED-Ed, embedded from YouTube.
+- Egg drop video: [“Can you solve the egg drop riddle?”](https://www.youtube.com/watch?v=NGtt7GJ1uiM) by Yossi Elran, TED-Ed, embedded from YouTube.
 - Parachuting robots presentation inspired by [david-peter.de/parachuting-robots](https://david-peter.de/parachuting-robots/).
 - Puzzle text, code and visuals are written for this project.

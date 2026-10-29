@@ -60,6 +60,7 @@
 // Checker panel: test every case, chart the results, replay the failing one.
 //   RiddleLab.mountChecker(el, { buttonLabel, intro, run, onBar, onReplay })
 //   run() returns a puzzle's judge() verdict (or a promise of one), or null on error.
+//   A verdict may also set limit (a dashed target line) and bar.tick (label only those bars).
 (() => {
   "use strict";
   const RL = (window.RiddleLab = window.RiddleLab || {});
@@ -91,12 +92,12 @@
       const bars = verdict.bars;
       const w = Math.max(240, svg.getBoundingClientRect().width), h = 140;
       const m = { l: 44, r: 4, t: 14, b: 22 }, iw = w - m.l - m.r, ih = h - m.t - m.b, base = m.t + ih;
-      const max = Math.max(1, ...bars.map(b => b.value || 0));
+      const max = Math.max(1, verdict.limit || 0, ...bars.map(b => b.value || 0));
       const mag = 10 ** Math.floor(Math.log10(max));
       const top = [1, 2, 2.5, 5, 10].map(s => s * mag).find(v => v >= max);
       const y = v => base - (v / top) * ih;
       const slot = iw / bars.length, bw = Math.max(2, slot - 2);
-      const every = bars.length <= 13 ? 1 : 10;
+      const every = bars.length <= 13 ? 1 : 10, ticked = bars.some(b => b.tick);
       let s = "";
       [0, top / 2, top].forEach(v => {
         s += `<line x1="${m.l}" x2="${w - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)"/>`;
@@ -109,10 +110,14 @@
           s += `<path d="M${x},${base} V${base - bh + r} Q${x},${base - bh} ${x + r},${base - bh} H${x + bw - r} Q${x + bw},${base - bh} ${x + bw},${base - bh + r} V${base} Z" fill="var(${b.fail ? "--bad" : "--bars"})"/>`;
         }
         if (b.fail) s += `<text x="${cx}" y="${b.value ? y(b.value) - 4 : base - 4}" text-anchor="middle" style="fill:var(--bad);font-weight:600">✕</text>`;
-        if (every === 1 || i === 0 || (i + 1) % every === 0) s += `<text x="${cx}" y="${h - 6}" text-anchor="middle">${b.label}</text>`;
+        if (ticked ? b.tick : every === 1 || i === 0 || (i + 1) % every === 0) s += `<text x="${cx}" y="${h - 6}" text-anchor="middle">${b.label}</text>`;
         s += `<rect x="${m.l + i * slot}" y="${m.t}" width="${slot}" height="${ih}" fill="transparent" data-i="${i}" style="cursor:${b.c !== undefined ? "pointer" : "default"}"/>`;
       });
       s += `<line x1="${m.l}" x2="${w - m.r}" y1="${base}" y2="${base}" stroke="var(--rule-strong)"/>`;
+      if (verdict.limit) {
+        s += `<line x1="${m.l}" x2="${w - m.r}" y1="${y(verdict.limit)}" y2="${y(verdict.limit)}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="5 4" pointer-events="none"/>`;
+        s += `<text x="${m.l + 4}" y="${y(verdict.limit) - 5}" pointer-events="none" style="fill:var(--good);font-weight:600">best: ${verdict.limit}</text>`;
+      }
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       svg.innerHTML = s;
     }
