@@ -13,6 +13,17 @@ def test_naive_program_never_meets():
     assert not Simulation.start(program, 0, 3).run(max_cycles=1000)
 
 
+def test_never_meeting_is_spotted_early():
+    sim = Simulation.start(parse("loop:\n  left\n  goto loop\n"), 0, 40)
+    assert not sim.run(max_cycles=100_000)
+    assert sim.never and sim.cycle < 100
+
+
+def test_spotting_never_doesnt_change_the_solution():
+    sim = Simulation.start(parse(EXAMPLE_PROGRAM), 0, 40)
+    assert sim.run(max_cycles=100_000) and not sim.never
+
+
 def test_swap_counts_as_meeting():
     # Put the robots on different instructions so they step towards each other.
     sim = Simulation.start(parse("right\nleft\n"), 0, 1)

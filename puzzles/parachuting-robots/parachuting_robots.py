@@ -133,6 +133,9 @@ class Simulation:
     parachutes: set[int] = field(default_factory=set)
     cycle: int = 0
     met: bool = False
+    never: bool = False  # proven they can never meet (see _never_meets)
+    _trail: list[tuple[int, int]] = field(default_factory=list)
+    _seen: dict[tuple[int, int], int] = field(default_factory=dict)
 
     @classmethod
     def start(cls, program: Program, a: int = 0, b: int = 6) -> "Simulation":
@@ -145,6 +148,9 @@ class Simulation:
         if self.met:
             return
         before = [r.position for r in self.robots]
+        if not self._trail:  # where the search for a repeat starts
+            self._seen[tuple(r.pc for r in self.robots)] = 0
+            self._trail.append(tuple(before))
         for robot in self.robots:
             self._execute(robot)
         self.cycle += 1
@@ -152,6 +158,28 @@ class Simulation:
         same_cell = after[0] == after[1]
         swapped = after[0] == before[1] and after[1] == before[0]
         self.met = same_cell or swapped
+        if not self.met:
+            self.never = self._never_meets()
+
+    def _never_meets(self) -> bool:
+        """A robot's next move depends only on its own instruction and whether it
+        stands on a parachute. So if both robots are back on the instructions they had
+        at an earlier cycle, and each one is either in the same cell or has moved past
+        the parachutes and kept clear of them since, everything in between repeats
+        forever, shifted. If that shift doesn't bring them closer, they never meet."""
+        a, b = self.robots
+        self._trail.append((a.position, b.position))
+        now, key = len(self._trail) - 1, (a.pc, b.pc)
+        prev = self._seen.get(key)
+        self._seen[key] = now
+        if prev is None:
+            return False
+        lo, hi = min(self.parachutes), max(self.parachutes)
+        shift = [self._trail[now][i] - self._trail[prev][i] for i in range(2)]
+        for i in range(2):
+            if shift[i] and any((t[i] <= hi if shift[i] > 0 else t[i] >= lo) for t in self._trail[prev:now + 1]):
+                return False
+        return (b.position - a.position) * (shift[1] - shift[0]) >= 0
 
     def _execute(self, robot: Robot) -> None:
         if robot.halted(self.program):
@@ -172,8 +200,8 @@ class Simulation:
         return all(r.halted(self.program) for r in self.robots)
 
     def run(self, max_cycles: int = 10_000) -> bool:
-        """Run until the robots meet, both halt, or max_cycles pass."""
-        while not self.met and not self.all_halted() and self.cycle < max_cycles:
+        """Run until the robots meet, both halt, they provably never meet, or max_cycles pass."""
+        while not self.met and not self.never and not self.all_halted() and self.cycle < max_cycles:
             self.step()
         return self.met
 
@@ -243,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     sim = Simulation.start(program, 0, args.gap)
-    while not sim.met and not sim.all_halted() and sim.cycle < args.max_cycles:
+    while not sim.met and not sim.never and not sim.all_halted() and sim.cycle < args.max_cycles:
         if not args.no_animate:
             print("\r" + render(sim), end="", flush=True)
             time.sleep(args.delay)
@@ -253,7 +281,11 @@ def main(argv: list[str] | None = None) -> int:
     if sim.met:
         print(f"The robots met after {sim.cycle} cycles.")
         return 0
-    reason = "both robots stopped" if sim.all_halted() else f"no meeting within {args.max_cycles} cycles"
+    reason = (
+        "both robots stopped" if sim.all_halted()
+        else "they repeat the same pattern forever without getting closer" if sim.never
+        else f"no meeting within {args.max_cycles} cycles"
+    )
     print(f"The robots did not meet: {reason}.")
     return 1
 

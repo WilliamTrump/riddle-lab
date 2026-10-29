@@ -43,6 +43,7 @@
       program, gap, cycle: 0, met: false,
       robots: [{ name: "A", pos: 0, pc: 0 }, { name: "B", pos: gap, pc: 0 }],
       chutes: new Map([[0, 0], [gap, 1]]), // cell -> whose parachute
+      never: false, trail: [[0, gap]], seen: new Map([["0,0", 0]]),
     };
   }
 
@@ -60,6 +61,30 @@
     s.cycle++;
     const [p, q] = s.robots.map(r => r.pos);
     s.met = p === q || (p === before[1] && q === before[0]);
+    s.trail.push([p, q]);
+    if (!s.met) s.never = neverMeets(s);
+  }
+
+  // A robot's next move depends only on its own instruction and whether it stands on
+  // a parachute. So if both robots are back on the instructions they had at an earlier
+  // cycle, and each one is either in the same cell or has moved past the parachutes and
+  // kept clear of them since, everything in between repeats forever, shifted. If that
+  // shift doesn't bring them closer, they can never meet.
+  function neverMeets(s) {
+    const [a, b] = s.robots, key = `${a.pc},${b.pc}`;
+    const prev = s.seen.get(key);
+    s.seen.set(key, s.cycle);
+    if (prev === undefined) return false;
+    const shift = [0, 1].map(i => s.trail[s.cycle][i] - s.trail[prev][i]);
+    for (let i = 0; i < 2; i++) {
+      if (!shift[i]) continue;
+      for (let c = s.cycle; c >= prev; c--) {
+        const x = s.trail[c][i];
+        if (shift[i] > 0 ? x <= s.gap : x >= 0) return false;
+      }
+    }
+    if (!shift[0] && !shift[1]) return "in place";
+    return (b.pos - a.pos) * (shift[1] - shift[0]) >= 0 ? "shifting" : false;
   }
 
   const stopped = s => s.robots.every(r => r.pc >= s.program.ins.length);
@@ -67,6 +92,7 @@
 
   function why(s) {
     if (stopped(s)) return "Both robots stopped.";
+    if (s.never === "in place") return "They repeat the same moves in place forever.";
     const d = distance(s);
     if (d === s.gap) return "They move in step, so the gap never closes.";
     if (d > s.gap) return "They drift apart.";
@@ -75,7 +101,7 @@
 
   function result(s) {
     if (s.met) return { ok: true, score: s.cycle, text: `Met after ${s.cycle.toLocaleString()} cycles` };
-    if (stopped(s) || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
+    if (stopped(s) || s.never || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
     return null;
   }
 

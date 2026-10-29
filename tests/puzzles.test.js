@@ -20,6 +20,16 @@ test("robots: same-speed walking fails at gap 1 and says why", () => {
   assert.match(v.detail, /never closes/);
 });
 
+test("robots: a run that can never meet stops early instead of running to the cycle limit", () => {
+  const run = (src, gap) => { const st = robots.start(robots.compile(src), gap); let r; while (!(r = robots.result(st))) robots.step(st); return [r, st.cycle]; };
+  let [r, cycles] = run("start:\n left\n goto start\n", 40);
+  assert.ok(!r.ok && cycles < 100);
+  assert.match(r.text, /never closes/);
+  [r, cycles] = run("start:\n right\n left\n goto start\n", 7);  // both step back and forth forever
+  assert.ok(!r.ok && cycles < 10);
+  assert.match(r.text, /in place/);
+});
+
 test("robots: compile errors carry a line number", () => {
   assert.throws(() => robots.compile("left\njump\n"), e => e.line === 2);
 });
