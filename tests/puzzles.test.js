@@ -38,6 +38,16 @@ test("robots: the page can keep a never-meeting run going for twice as long", ()
   assert.strictEqual(robots.result(twice).text, robots.result(once).text);
 });
 
+test("robots: on the page, drifting apart keeps going until the distance has doubled", () => {
+  const prog = robots.compile("start:\n left\n skipNext\n goto start\nturn:\n right\n goto turn\n");
+  const st = robots.start(prog, 3);
+  st.linger = 2;
+  while (!robots.result(st)) robots.step(st);
+  assert.strictEqual(robots.result(st).text, "They drift apart.");
+  assert.ok(st.cycle >= 2 * st.neverAt);
+  assert.ok(robots.distance(st) >= 2 * st.neverDist + 10);
+});
+
 test("robots: compile errors carry a line number", () => {
   assert.throws(() => robots.compile("left\njump\n"), e => e.line === 2);
 });

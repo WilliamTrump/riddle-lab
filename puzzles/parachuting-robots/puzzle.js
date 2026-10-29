@@ -43,8 +43,9 @@
       program, gap, cycle: 0, met: false,
       robots: [{ name: "A", pos: 0, pc: 0 }, { name: "B", pos: gap, pc: 0 }],
       chutes: new Map([[0, 0], [gap, 1]]), // cell -> whose parachute
-      never: false, neverAt: 0, trail: [[0, gap]], seen: new Map([["0,0", 0]]),
-      linger: 1,  // keep running until cycle neverAt * linger, so the page can show it a while
+      never: false, neverAt: 0, neverDist: 0, trail: [[0, gap]], seen: new Map([["0,0", 0]]),
+      linger: 1,      // keep running until cycle neverAt * linger, so the page can show it a while
+      lingerMin: 0,   // ...and for at least this many cycles after it's spotted
     };
   }
 
@@ -65,7 +66,7 @@
     s.trail.push([p, q]);
     if (!s.met && !s.never) {
       s.never = neverMeets(s);
-      if (s.never) s.neverAt = s.cycle;
+      if (s.never) { s.neverAt = s.cycle; s.neverDist = distance(s); }
     }
   }
 
@@ -103,9 +104,18 @@
     return "They get closer, but not close enough.";
   }
 
+  // With linger > 1, keep going for linger times as long as it took to spot (and at least
+  // lingerMin cycles more), and when they're drifting apart, also until the distance has
+  // doubled (plus 10 cells) so it shows.
+  function lingered(s) {
+    if (s.cycle < Math.max(s.neverAt * s.linger, s.neverAt + s.lingerMin)) return false;
+    const d = distance(s);
+    return s.linger === 1 || d <= s.neverDist || d >= 2 * s.neverDist + 10;
+  }
+
   function result(s) {
     if (s.met) return { ok: true, score: s.cycle, text: `Met after ${s.cycle.toLocaleString()} cycles` };
-    if (stopped(s) || (s.never && s.cycle >= s.neverAt * s.linger) || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
+    if (stopped(s) || (s.never && lingered(s)) || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
     return null;
   }
 
