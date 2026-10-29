@@ -30,6 +30,14 @@ test("robots: a run that can never meet stops early instead of running to the cy
   assert.match(r.text, /in place/);
 });
 
+test("robots: the page can keep a never-meeting run going for twice as long", () => {
+  const prog = robots.compile("start:\n left\n goto start\n");
+  const finish = linger => { const st = robots.start(prog, 40); st.linger = linger; while (!robots.result(st)) robots.step(st); return st; };
+  const once = finish(1), twice = finish(2);
+  assert.strictEqual(twice.cycle, 2 * once.cycle);
+  assert.strictEqual(robots.result(twice).text, robots.result(once).text);
+});
+
 test("robots: compile errors carry a line number", () => {
   assert.throws(() => robots.compile("left\njump\n"), e => e.line === 2);
 });

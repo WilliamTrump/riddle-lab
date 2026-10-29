@@ -43,7 +43,8 @@
       program, gap, cycle: 0, met: false,
       robots: [{ name: "A", pos: 0, pc: 0 }, { name: "B", pos: gap, pc: 0 }],
       chutes: new Map([[0, 0], [gap, 1]]), // cell -> whose parachute
-      never: false, trail: [[0, gap]], seen: new Map([["0,0", 0]]),
+      never: false, neverAt: 0, trail: [[0, gap]], seen: new Map([["0,0", 0]]),
+      linger: 1,  // keep running until cycle neverAt * linger, so the page can show it a while
     };
   }
 
@@ -62,7 +63,10 @@
     const [p, q] = s.robots.map(r => r.pos);
     s.met = p === q || (p === before[1] && q === before[0]);
     s.trail.push([p, q]);
-    if (!s.met) s.never = neverMeets(s);
+    if (!s.met && !s.never) {
+      s.never = neverMeets(s);
+      if (s.never) s.neverAt = s.cycle;
+    }
   }
 
   // A robot's next move depends only on its own instruction and whether it stands on
@@ -101,7 +105,7 @@
 
   function result(s) {
     if (s.met) return { ok: true, score: s.cycle, text: `Met after ${s.cycle.toLocaleString()} cycles` };
-    if (stopped(s) || s.never || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
+    if (stopped(s) || (s.never && s.cycle >= s.neverAt * s.linger) || s.cycle >= MAX_CYCLES) return { ok: false, score: null, text: why(s) };
     return null;
   }
 

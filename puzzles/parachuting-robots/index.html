@@ -361,7 +361,10 @@ const cps = () => Math.round(10 ** (Number($("speed").value) / 100 * 3));
 function reset(animateLanding = true, note = "") {
   const g = gapValue();
   $("gap").value = g;
-  if (program) runner.load(program, g); else { runner.state = null; runner.playing = false; }
+  if (program) {
+    runner.load(program, g);
+    runner.state.linger = 2;   // when they can never meet, keep showing it for twice as long
+  } else { runner.state = null; runner.playing = false; }
   draw = [0, g].map(p => ({ from: p, to: p, t0: 0, dur: 0 }));
   landT0 = animateLanding ? performance.now() : -Infinity;
   cam = null;
