@@ -65,23 +65,36 @@ test("hats: answers from Python or Java become a strategy that replays the same"
 });
 
 const eggs = require("../puzzles/egg-drop/puzzle.js");
-const EGG = {
-  one: safe => safe + 1,
-  tens: (safe, broken, n) => (n === 2 ? Math.min(safe + 10, broken - 1) : safe + 1),
-  shrinking: (safe, broken, n) => {
-    if (n === 1) return safe + 1;
-    let floor = 0, gap = 14;
-    while (floor <= safe) { floor += gap; gap--; }
-    return Math.min(floor, 100);
+const FIND = {
+  one: drop => { for (let f = 1; f <= 100; f++) if (drop(f)) return f - 1; return 100; },
+  tens: drop => {
+    let safe = 0, floor = 10;
+    while (floor <= 100 && !drop(floor)) { safe = floor; floor += 10; }
+    const top = Math.min(floor, 101);
+    for (let f = safe + 1; f < top; f++) if (drop(f)) return f - 1;
+    return top - 1;
+  },
+  shrinking: drop => {
+    let safe = 0, gap = 14, floor;
+    for (;;) {
+      floor = Math.min(safe + gap, 100);
+      if (drop(floor)) break;
+      safe = floor;
+      if (safe === 100) return 100;
+      gap--;
+    }
+    for (let f = safe + 1; f < floor; f++) if (drop(f)) return f - 1;
+    return floor - 1;
   },
 };
+const check = name => checkAll(eggs, eggs.fromFunction(FIND[name]));
 
 test("eggs: worst cases match the Python version (100, 19, 14)", () => {
-  assert.strictEqual(checkAll(eggs, EGG.one).worst, 100);
-  const tens = checkAll(eggs, EGG.tens);
+  assert.strictEqual(check("one").worst, 100);
+  const tens = check("tens");
   assert.ok(!tens.ok);
   assert.strictEqual(tens.worst, 19);
-  const v = checkAll(eggs, EGG.shrinking);
+  const v = check("shrinking");
   assert.ok(v.ok);
   assert.strictEqual(v.worst, 14);
   assert.strictEqual(v.bars.length, 101);
@@ -93,42 +106,60 @@ test("eggs: the best plan with two eggs and 100 floors is 14 drops", () => {
   assert.strictEqual(eggs.minDrops(1, 37), 37);
 });
 
-test("eggs: replaying a too-slow plan stops at drop 15", () => {
-  const v = checkAll(eggs, EGG.tens);
+test("eggs: the replay goes one drop per step, then gives the answer", () => {
   const r = new Runner(eggs);
-  r.load(EGG.tens, v.failing, { stopAtMistake: true });
+  r.load(eggs.fromFunction(FIND.shrinking), { crit: 100 });
+  r.step(12);
+  assert.strictEqual(r.state.drops.length, 12);
+  assert.strictEqual(r.result, null);
+  r.step();
+  assert.ok(r.result.ok);
+  assert.strictEqual(r.state.answer, 100);
+});
+
+test("eggs: replaying a too-slow plan stops at drop 15", () => {
+  const v = check("tens");
+  const r = new Runner(eggs);
+  r.load(eggs.fromFunction(FIND.tens), v.failing, { stopAtMistake: true });
   r.step(200);
   assert.strictEqual(r.state.drops.length, 15);
   assert.match(r.mistake, /never needs more than 14/);
 });
 
-test("eggs: skipping floors with one egg left can lose both eggs", () => {
-  const v = checkAll(eggs, (safe, broken, n) => (n === 2 ? Math.min(safe + 10, broken - 1) : Math.min(safe + 2, broken - 1)));
-  assert.ok(!v.ok);
-  assert.match(v.headline, /Both eggs broke/);
+test("eggs: a wrong answer fails, and the replay stops on it", () => {
+  const guess = drop => (drop(50) ? 0 : 75);
+  const v = checkAll(eggs, eggs.fromFunction(guess));
+  assert.match(v.headline, /Wrong floor in 99 of 101/);
+  const r = new Runner(eggs);
+  r.load(eggs.fromFunction(guess), v.failing, { stopAtMistake: true });
+  r.step(10);
+  assert.match(r.mistake, /find_floor said/);
 });
 
-test("eggs: a floor that's already known is an error", () => {
+test("eggs: a third egg is an error", () => {
   const r = new Runner(eggs);
-  r.load(() => 50, { crit: 70 });
-  r.step(2);
-  assert.match(r.error.message, /already known to be safe/);
+  r.load(eggs.fromFunction(drop => { drop(100); drop(100); drop(100); return 0; }), { crit: 5 });
+  r.step(10);
+  assert.match(r.error.message, /Both replica eggs are already broken/);
+  assert.strictEqual(r.state.drops.length, 2);
 });
 
-test("eggs: the unlucky museum makes the best plan use all 14 drops", () => {
+test("eggs: the unlucky museum makes the best plan use all 14 drops by hand", () => {
   const r = new Runner(eggs);
-  r.load(EGG.shrinking, { unlucky: true });
-  r.step(200);
+  r.load(null, { unlucky: true });
+  while (!r.result) {
+    const s = r.state;
+    let f = s.safe + 1;
+    if (s.eggs === 2) { let floor = 0, gap = 14; while (floor <= s.safe) { floor += gap; gap--; } f = Math.min(floor, 100); }
+    r.step(1, f);
+  }
   assert.ok(r.result.ok);
   assert.strictEqual(r.state.drops.length, 14);
-  r.load(EGG.tens, { unlucky: true });
-  r.step(200);
-  assert.ok(r.state.drops.length > 14);
 });
 
-test("eggs: answers from Python or Java replay the same", () => {
+test("eggs: runs recorded by Python or Java replay the same", () => {
   const crits = eggs.cases().map(c => c.crit);
-  const answers = crits.map(crit => { const s = eggs.start(EGG.shrinking, { crit }); while (!eggs.result(s)) eggs.step(s); return s.drops.map(d => d.floor); });
+  const answers = crits.map(crit => eggs.transcript(FIND.shrinking, crit));
   const v = checkAll(eggs, eggs.fromAnswers(crits, answers));
   assert.ok(v.ok);
   assert.strictEqual(v.worst, 14);

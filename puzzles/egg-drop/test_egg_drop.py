@@ -1,6 +1,6 @@
 import pytest
 
-from egg_drop import BEST, FLOORS, STRATEGIES, play, worst_case
+from egg_drop import BEST, FLOORS, STRATEGIES, RuleError, play, worst_case
 
 
 def test_one_floor_at_a_time_takes_up_to_100_drops():
@@ -20,11 +20,22 @@ def test_shrinking_gaps_follows_the_video():
     assert [f for f, _ in drops] == [14, 27, 39, 50, 60, 69, 77, 84, 90, 95, 99, 100]
 
 
-def test_skipping_floors_with_one_egg_left_can_lose():
-    found, drops = play(5, lambda safe, broken, eggs: min(safe + 10, broken - 1) if eggs == 2 else safe + 2)
-    assert not found and [f for f, _ in drops] == [10, 2, 4, 6]
+def test_guessing_gives_wrong_answers():
+    def guess(drop):
+        return 0 if drop(50) else 75
+    assert worst_case(guess)[0] == 99
 
 
-def test_a_known_floor_is_rejected():
-    with pytest.raises(ValueError, match="already known to be safe"):
-        play(50, lambda safe, broken, eggs: max(1, safe))
+def test_a_third_egg_is_an_error():
+    def careless(drop):
+        drop(100)
+        drop(100)
+        drop(100)
+        return 0
+    with pytest.raises(RuleError, match="Both replica eggs"):
+        play(5, careless)
+
+
+def test_the_answer_must_be_a_floor():
+    with pytest.raises(RuleError, match="return a floor"):
+        play(5, lambda drop: None)

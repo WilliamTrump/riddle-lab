@@ -55,11 +55,21 @@ def eggdrop_ok(cases) -> bool:
 
 
 def eggdrop_read(stdout: str, cases) -> list:
+    """One transcript per floor: {"drops": [...], "answer": n} or {"drops": [...], "error": text, "line": n}."""
+    rows = []
     try:
-        rows = [[int(f) for f in line.split("\t")] for line in stdout.splitlines()]
+        for line in stdout.splitlines():
+            drops, end = line.split("\t", 1)
+            row = {"drops": [int(f) for f in drops.split(",") if f]}
+            if end.startswith("!"):
+                at, message = end[1:].split("\t", 1)
+                row.update(error=message, line=int(at))
+            else:
+                row["answer"] = int(end)
+            rows.append(row)
     except ValueError:
-        raise JavaError("The program printed something that isn't a floor.")
-    if len(rows) != len(cases) or not all(rows):
+        raise JavaError("The program printed something the page couldn't read.")
+    if len(rows) != len(cases):
         raise JavaError("The program stopped before every floor was tried.")
     return rows
 
@@ -79,7 +89,7 @@ PUZZLES = {
         "ok": eggdrop_ok,
         "write": lambda cases: "".join(f"{c}\n" for c in cases),
         "read": eggdrop_read,
-        "signature": "static int nextDrop(int safe, int broken, int eggs)",
+        "signature": "static int findFloor(Building building)",
     },
 }
 

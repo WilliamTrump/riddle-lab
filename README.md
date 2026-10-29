@@ -11,7 +11,7 @@ it breaks.
 | | Puzzle | What you do |
 |---|---|---|
 | 🎩 | **The Prisoner Hats** | Ten prisoners, black and white hats, one word each. Play the line yourself, or write a strategy in **Python** or **Java** and test it on all 1,024 lineups. Includes the TED-Ed video. |
-| 🥚 | **The Egg Drop** | A 100-story museum and two replica eggs: find the highest floor an egg survives in as few drops as possible. Drop eggs by hand (try the unlucky museum), or code `next_drop` in **Python** or **Java** and test all 101 floors. Includes the TED-Ed video. |
+| 🥚 | **The Egg Drop** | A 100-story museum and two replica eggs: find the highest floor an egg survives in as few drops as possible. Drop eggs by hand (try the unlucky museum), or write the whole search as `find_floor(drop)` in **Python** or **Java** and test all 101 floors. Includes the TED-Ed video. |
 | 🪂 | **Parachuting Robots** | Two robots on an endless line run the same tiny program. Write the code that makes them meet, step through it, and test every starting gap. |
 
 ## Features

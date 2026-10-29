@@ -193,98 +193,142 @@ const store = {
 
 const PRESETS = {
   python: {
-    tens: `# safe:   highest floor an egg survived (0 at first)
-# broken: lowest floor an egg broke on (101 at first)
-# eggs:   replica eggs left (2, then 1)
-# Return the floor to drop from next. The game ends when broken == safe + 1.
+    tens: `# drop(floor) drops a replica egg from that floor (1-100).
+#   It returns True if the egg broke, False if it survived.
+#   You have two replica eggs: once both are broken, drop() raises an error.
+# Return the highest safe floor (0 if even floor 1 breaks an egg).
 
-def next_drop(safe, broken, eggs):
-    if eggs == 2:
-        # first egg: jump up 10 floors at a time
-        return min(safe + 10, broken - 1)
-    # last egg: go floor by floor
-    return safe + 1
+def find_floor(drop):
+    # first egg: every 10th floor until it breaks
+    safe, floor = 0, 10
+    while floor <= 100 and not drop(floor):
+        safe, floor = floor, floor + 10
+    # second egg: floor by floor above the last safe floor
+    for f in range(safe + 1, min(floor, 101)):
+        if drop(f):
+            return f - 1
+    return min(floor, 101) - 1
 `,
-    one: `def next_drop(safe, broken, eggs):
+    one: `def find_floor(drop):
     # one floor at a time, never risking a skipped floor
-    return safe + 1
+    for floor in range(1, 101):
+        if drop(floor):
+            return floor - 1
+    return 100
 `,
-    blank: `def next_drop(safe, broken, eggs):
+    blank: `def find_floor(drop):
+    # drop(floor) returns True if the egg broke
     ...
 `,
-    solution: `def next_drop(safe, broken, eggs):
-    if eggs == 1:
-        return safe + 1  # last egg: go floor by floor
-    # first egg: 14, then 13 floors higher, then 12... (14, 27, 39, 50, ...)
-    floor, gap = 0, 14
-    while floor <= safe:
-        floor, gap = floor + gap, gap - 1
-    return min(floor, 100)
+    solution: `def find_floor(drop):
+    # first egg: up 14 floors, then 13, then 12... (14, 27, 39, 50, ...)
+    safe, gap = 0, 14
+    while True:
+        floor = min(safe + gap, 100)
+        if drop(floor):
+            break
+        safe = floor
+        if safe == 100:
+            return 100
+        gap -= 1
+    # second egg: floor by floor between the last safe floor and where it broke
+    for f in range(safe + 1, floor):
+        if drop(f):
+            return f - 1
+    return floor - 1
 `,
   },
   java: {
     tens: `class Strategy {
-    // safe:   highest floor an egg survived (0 at first)
-    // broken: lowest floor an egg broke on (101 at first)
-    // eggs:   replica eggs left (2, then 1)
-    // Return the floor to drop from next. The game ends when broken == safe + 1.
-    static int nextDrop(int safe, int broken, int eggs) {
-        if (eggs == 2) {
-            // first egg: jump up 10 floors at a time
-            return Math.min(safe + 10, broken - 1);
+    // building.drop(floor) drops a replica egg from that floor (1-100).
+    //   It returns true if the egg broke, false if it survived.
+    //   You have two replica eggs: once both are broken, drop() throws.
+    // Return the highest safe floor (0 if even floor 1 breaks an egg).
+    static int findFloor(Building building) {
+        // first egg: every 10th floor until it breaks
+        int safe = 0, floor = 10;
+        while (floor <= 100 && !building.drop(floor)) {
+            safe = floor;
+            floor += 10;
         }
-        // last egg: go floor by floor
-        return safe + 1;
+        // second egg: floor by floor above the last safe floor
+        int top = Math.min(floor, 101);
+        for (int f = safe + 1; f < top; f++) {
+            if (building.drop(f)) return f - 1;
+        }
+        return top - 1;
     }
 }
 `,
     one: `class Strategy {
-    static int nextDrop(int safe, int broken, int eggs) {
+    static int findFloor(Building building) {
         // one floor at a time, never risking a skipped floor
-        return safe + 1;
+        for (int floor = 1; floor <= 100; floor++) {
+            if (building.drop(floor)) return floor - 1;
+        }
+        return 100;
     }
 }
 `,
     blank: `class Strategy {
-    static int nextDrop(int safe, int broken, int eggs) {
+    // building.drop(floor) returns true if the egg broke
+    static int findFloor(Building building) {
         return 0;
     }
 }
 `,
     solution: `class Strategy {
-    static int nextDrop(int safe, int broken, int eggs) {
-        if (eggs == 1) return safe + 1;  // last egg: go floor by floor
-        // first egg: 14, then 13 floors higher, then 12... (14, 27, 39, 50, ...)
-        int floor = 0, gap = 14;
-        while (floor <= safe) {
-            floor += gap;
+    static int findFloor(Building building) {
+        // first egg: up 14 floors, then 13, then 12... (14, 27, 39, 50, ...)
+        int safe = 0, gap = 14, floor;
+        while (true) {
+            floor = Math.min(safe + gap, 100);
+            if (building.drop(floor)) break;
+            safe = floor;
+            if (safe == 100) return 100;
             gap--;
         }
-        return Math.min(floor, 100);
+        // second egg: floor by floor between the last safe floor and where it broke
+        for (int f = safe + 1; f < floor; f++) {
+            if (building.drop(f)) return f - 1;
+        }
+        return floor - 1;
     }
 }
 `,
   },
 };
 
-// Python: play out every highest-safe-floor, recording the floors next_drop picks.
+// Python: run find_floor once for every highest safe floor, with a drop() that keeps
+// the rules, and record what it did. Errors point at the player's line, not ours.
 const HARNESS = `
-import json
+import json, traceback
+class __EggRule(Exception):
+    pass
 def __run_all(crits_json):
     out = []
     for crit in json.loads(crits_json):
-        safe, broken, eggs, drops = 0, 101, 2, []
-        while broken - safe > 1 and eggs > 0:
-            f = next_drop(safe, broken, eggs)
-            whole = isinstance(f, int) and not isinstance(f, bool)
-            drops.append(f if whole else repr(f))
-            if not whole or not safe < f < broken:
-                break
-            if f > crit:
-                broken, eggs = f, eggs - 1
-            else:
-                safe = f
-        out.append(drops)
+        drops, eggs = [], [2]
+        def drop(floor):
+            if not eggs[0]:
+                raise __EggRule("Both replica eggs are already broken.")
+            if isinstance(floor, bool) or not isinstance(floor, int) or not 1 <= floor <= 100:
+                raise __EggRule(f"drop() needs a floor from 1 to 100, but got {floor!r}.")
+            if len(drops) >= 200:
+                raise __EggRule("More than 200 drops.")
+            drops.append(floor)
+            if floor > crit:
+                eggs[0] -= 1
+                return True
+            return False
+        try:
+            answer = find_floor(drop)
+            whole = isinstance(answer, int) and not isinstance(answer, bool)
+            out.append({"drops": drops, "answer": answer if whole else repr(answer)})
+        except Exception as e:
+            mine = [f for f in traceback.extract_tb(e.__traceback__) if f.name not in ("drop", "__run_all")]
+            message = str(e) if isinstance(e, __EggRule) else f"{type(e).__name__}: {e}"
+            out.append({"drops": drops, "error": message, "line": mine[-1].lineno if mine else 0})
     return json.dumps(out)
 `;
 
@@ -388,15 +432,22 @@ function renderCard() {
     return `<svg viewBox="-8 -9 16 19" aria-label="${left ? "replica egg" : "broken egg"}"${left ? "" : ` opacity="0.5"`}>${eggShape(0, 0, 1, "")}${left ? "" : `<path d="M-6,1 l3,-2 l2,3 l3,-3 l2,2 l2,-2" fill="none" stroke="var(--bad)" stroke-width="1.6"/>`}</svg>`;
   }).join("");
   const range = $("range");
-  if (r && r.ok) range.innerHTML = s.safe ? `Highest safe floor: <strong>${s.safe}</strong>` : `<strong>Even floor 1</strong> breaks an egg`;
+  if (s.plan && s.answer !== null) range.innerHTML = `find_floor returned <strong>${s.answer}</strong>. The highest safe floor is <strong>${s.crit}</strong>.`;
+  else if (r && r.ok) range.innerHTML = s.safe ? `Highest safe floor: <strong>${s.safe}</strong>` : `<strong>Even floor 1</strong> breaks an egg`;
   else range.innerHTML = s.broken - s.safe - 1 === P.FLOORS
     ? `The highest safe floor could be anything from <strong>0</strong> to <strong>100</strong>.`
     : `The highest safe floor is somewhere from <strong>${s.safe}</strong> to <strong>${s.broken - 1}</strong>.`;
   const o = $("outcome");
-  if (r) { o.textContent = r.ok ? `Found in ${s.drops.length} drops ✓` : "Out of eggs ✕"; o.className = `outcome ${r.ok ? "ok" : "bad"}`; }
+  if (r) { o.textContent = `${outcomeText(r, s)} ${r.ok ? "✓" : "✕"}`; o.className = `outcome ${r.ok ? "ok" : "bad"}`; }
   else { o.textContent = ""; o.className = "outcome"; }
   $("log").innerHTML = s.drops.map((d, i) => `<li><span class="n">${i + 1}.</span><span class="f">Floor ${d.floor}</span><span class="${d.broke ? "bad" : "ok"}">${d.broke ? "broke" : "survived"}</span></li>`).join("");
   $("log").scrollTop = $("log").scrollHeight;
+}
+
+// Short form of a finished round, for the status and the card.
+function outcomeText(r, s) {
+  if (s.plan) return r.ok ? `Right after ${s.drops.length} drops` : "Wrong floor";
+  return r.ok ? `Found in ${s.drops.length} drops` : "Out of eggs";
 }
 
 function setStatus(state, text) { $("status").dataset.state = state; $("status-text").textContent = text; }
@@ -409,7 +460,7 @@ function floorAt(e) {
   if (p.x < LEFT - 30 || p.x > LEFT + WIDE + 10 || p.y < TOP || p.y >= GROUND) return null;
   return P.FLOORS - Math.floor((p.y - TOP) / FH);
 }
-const canDrop = f => mode === "play" && !runner.result && f !== null && !P.badFloor(runner.state, f);
+const canDrop = f => mode === "play" && !runner.result && f !== null && f > runner.state.safe && f < runner.state.broken;
 $("tower").addEventListener("mousemove", e => {
   const f = floorAt(e), h = canDrop(f) ? f : null;
   if (h !== hover) { hover = h; drawHover(); }
@@ -472,7 +523,8 @@ function showError(msg, line) {
 }
 function onEdit() { store.set(codeKey(), editor.get()); showError(""); checker.clear(); }
 
-// Run the player's code for these highest-safe-floors and return a next_drop strategy.
+// Run the player's find_floor once for each of these highest safe floors and return the
+// recorded runs as a strategy the runner can replay drop by drop.
 async function strategyFor(crits) {
   if (busy) return null;
   busy = true; $("run").disabled = true;
@@ -480,7 +532,7 @@ async function strategyFor(crits) {
   try {
     const answers = lang === "java"
       ? await RL.runJava("eggdrop", editor.get(), crits)
-      : await RL.python.run({ source: editor.get(), harness: HARNESS, required: ["next_drop"], payload: crits });
+      : await RL.python.run({ source: editor.get(), harness: HARNESS, required: ["find_floor"], payload: crits });
     showError("");
     setStatus("ready", "Ready");
     return P.fromAnswers(crits, answers);
@@ -513,7 +565,7 @@ document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click"
 $("preset").addEventListener("change", e => { if (e.target.value) editor.set(PRESETS[lang][e.target.value]); e.target.value = ""; });
 $("run").addEventListener("click", () => {
   if (runner.playing) runner.pause();
-  else if (runner.state.strategy && !runner.finished && runner.state.drops.length) runner.play();
+  else if (runner.state.plan && !runner.finished && runner.state.drops.length) runner.play();
   else runCurrent();
 });
 document.addEventListener("shell:load-solution", () => { setMode("code"); editor.set(PRESETS[lang].solution); });
@@ -531,7 +583,7 @@ const checker = RL.mountChecker($("checker"), {
   run: async () => {
     const strategy = await strategyFor(CRITS);
     if (!strategy) return null;
-    try { return RL.checkAll(P, strategy); } catch (e) { showError(e.message); return null; }
+    try { return RL.checkAll(P, strategy); } catch (e) { showError(e.message, e.line); return null; }
   },
   onBar: c => c && replay(c),
   onReplay: replay,
@@ -550,12 +602,12 @@ runner.on((e) => {
   render();
   const r = runner.result, callout = $("callout");
   callout.hidden = true;
-  if (runner.error) { showError(runner.error.message); return; }
+  if (runner.error) { showError(runner.error.message, runner.error.line); return; }
   if (mode === "play") {
     renderTurn();
     if (r) {
       if (!s.counted) { s.counted = true; history.unshift({ ok: r.ok, drops: s.drops.length, unlucky: s.unlucky }); renderHistory(); }
-      setStatus(r.ok ? "good" : "fail", r.ok ? `Found in ${s.drops.length} drops` : "Out of eggs");
+      setStatus(r.ok ? "good" : "fail", outcomeText(r, s));
     } else setStatus("running", s.drops.length ? `${s.drops.length} drop${s.drops.length === 1 ? "" : "s"} so far` : "Your turn");
     return;
   }
@@ -563,8 +615,8 @@ runner.on((e) => {
   if (runner.mistake) {
     callout.hidden = false;
     callout.innerHTML = `<b>✕ ${runner.mistake}</b><span>Highest safe floor: ${s.crit}.</span>`;
-    setStatus("fail", runner.result && !runner.result.ok ? "Out of eggs" : "Too many drops");
-  } else if (r) setStatus(r.ok ? "good" : "fail", r.ok ? `Found in ${s.drops.length} drops` : "Out of eggs");
+    setStatus("fail", r && !r.ok ? outcomeText(r, s) : "Too many drops");
+  } else if (r) setStatus(r.ok ? "good" : "fail", outcomeText(r, s));
   else if (s.drops.length) setStatus("running", `Drop ${s.drops.length}: floor ${s.drops[s.drops.length - 1].floor}`);
   else setStatus("ready", `Highest safe floor: ${crit}`);
 });
