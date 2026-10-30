@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Egg Drop · Riddle Lab</title>
+<meta name="description" content="A 100-story museum, two replica eggs, and as few drops as possible to find the highest safe floor. Play it or code a strategy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../shared/shell.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<style>
+:root {
+  --facade: #E6DFD2; --facade-edge: #B9AE9B; --window: #CFC5B3; --roof: #8C7B63;
+  --safe-tint: #1E7F47; --break-tint: #C2302A; --crit: #C8901C;
+  --egg: #F3EBDD; --egg-edge: #B8A88C; --yolk: #E9A92B; --truck: #4A5869; --ground: #9AA5B1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --facade: #2C333D; --facade-edge: #485361; --window: #3B4451; --roof: #6E7C8D; --safe-tint: #4CB97A; --break-tint: #EE6A5F; --crit: #E5B24A; --egg: #EDE4D3; --egg-edge: #A8987A; --truck: #8494A6; --ground: #485361; }
+}
+:root[data-theme="dark"] { --facade: #2C333D; --facade-edge: #485361; --window: #3B4451; --roof: #6E7C8D; --safe-tint: #4CB97A; --break-tint: #EE6A5F; --crit: #E5B24A; --egg: #EDE4D3; --egg-edge: #A8987A; --truck: #8494A6; --ground: #485361; }
+
+.stage-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+.toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: var(--ink-2); cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--ink); width: 16px; height: 16px; }
+.room { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 20px 40px; padding: 18px 14px; }
+#tower { display: block; width: auto; height: min(660px, 78vh); max-width: 100%; touch-action: manipulation; }
+#tower.clickable { cursor: pointer; }
+#tower text { font-family: var(--font-mono); }
+
+.card { display: grid; gap: 14px; width: 250px; max-width: 100%; }
+.stat { display: grid; gap: 4px; }
+.stat-num { font: 700 44px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.eggs { display: flex; gap: 10px; }
+.eggs svg { width: 30px; height: auto; }
+.range { font-size: 14.5px; color: var(--ink-2); }
+.range strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.legend { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .ls::before { background: color-mix(in srgb, var(--safe-tint) 45%, var(--facade)); }
+.legend .lb::before { background: color-mix(in srgb, var(--break-tint) 45%, var(--facade)); }
+.legend .lu::before { background: var(--facade); border: 1px solid var(--facade-edge); }
+.outcome { font-size: 14.5px; font-weight: 600; min-height: 1.5em; }
+.outcome.ok { color: var(--good); }
+.outcome.bad { color: var(--bad); }
+.log { list-style: none; margin: 0; padding: 0; display: grid; max-height: 230px; overflow-y: auto; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.log li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid var(--rule); }
+.log li:first-child { border-top: 0; }
+.log .n { color: var(--muted); width: 2.2em; }
+.log .f { flex: 1; }
+.log .ok { color: var(--good); }
+.log .bad { color: var(--bad); }
+
+.bench { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: 18px; align-items: start; }
+@media (max-width: 880px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.turn h3 { margin: 0; font: 700 19px/1.2 var(--font-display); }
+.turn p { margin: 6px 0 0; color: var(--ink-2); }
+.answer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.answer input { width: 6.5em; padding: 7px 10px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--surface-2); color: var(--ink); font: 500 15px var(--font-mono); }
+.error { color: var(--bad); margin: 0; font: 13px/1.5 var(--font-mono); white-space: pre-wrap; }
+#strategy { width: 100%; min-height: 320px; padding: 12px 14px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--surface-2); font: 13.5px/1.6 var(--font-mono); white-space: pre; tab-size: 4; }
+.history { list-style: none; margin: 0; padding: 0; display: grid; }
+.history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; font-variant-numeric: tabular-nums; }
+.history li:first-child { border-top: 0; }
+.big { font: 700 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.big small { font: 500 14px var(--font-body); color: var(--muted); margin-left: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="site-bar">
+    <a class="wordmark" href="../../index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="var(--ink)"/><path d="M8 9.5a4 4 0 1 1 5.6 3.7c-.9.4-1.6 1.1-1.6 2.1v.4" stroke="var(--on-ink)" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="18.6" r="1.2" fill="var(--on-ink)"/></svg>Riddle Lab</a>
+    <a class="back" href="../../index.html">All puzzles</a>
+  </nav>
+
+  <section class="intro">
+    <div class="intro-text">
+      <h1>The Egg Drop</h1>
+      <p>A new museum has a Fabergé egg on each floor of a 100-story building, each one worth more than the one below. A thief will drop one out of a window into her truck, and wants the most valuable egg that won't break.</p>
+      <ul class="rules">
+        <li>She has <strong>two replica eggs</strong> to test with. A broken replica is gone for good.</li>
+        <li>An egg survives a drop from any floor up to some <strong>highest safe floor</strong>, and breaks from any floor above it.</li>
+      </ul>
+      <p class="goal">What's the fewest drops that always finds the highest safe floor, wherever it is?</p>
+    </div>
+    <div class="video" data-video="NGtt7GJ1uiM" data-video-title="Can you solve the egg drop riddle? (TED-Ed)">
+      <div class="video-frame"></div>
+      <p class="video-note">TED-Ed · Yossi Elran. The video explains the answer, so pause when you want to think.</p>
+    </div>
+  </section>
+
+  <section class="panel" data-sandbox aria-label="The museum">
+    <div class="stage-head">
+      <span class="status" id="status" data-state="ready" role="status"><span class="dot"></span><span id="status-text">Ready</span></span>
+      <div class="row">
+        <label class="toggle" id="unlucky-wrap" title="The museum answers each drop in whichever way costs you the most drops"><input type="checkbox" id="unlucky"> Unlucky museum</label>
+        <button class="btn" type="button" id="new-round">New building</button>
+      </div>
+    </div>
+    <div class="room">
+      <svg id="tower" role="img" aria-label="A 100-story building"></svg>
+      <div class="card">
+        <div class="stat"><span class="label">Drops</span><span class="stat-num" id="drops-num">0</span></div>
+        <div class="stat"><span class="label">Replica eggs left</span><div class="eggs" id="eggs"></div></div>
+        <div class="range" id="range"></div>
+        <div class="outcome" id="outcome"></div>
+        <div class="legend"><span class="ls">known safe</span><span class="lb">known to break</span><span class="lu">not known yet</span></div>
+        <ol class="log" id="log" aria-label="Drops so far"></ol>
+      </div>
+    </div>
+    <div class="callout" id="callout" hidden></div>
+  </section>
+
+  <div class="bench">
+    <section class="panel" aria-label="Sandbox">
+      <div class="panel-head">
+        <div class="segmented" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" id="tab-play" aria-selected="true">Play</button>
+          <button type="button" role="tab" id="tab-code" aria-selected="false">Code a strategy</button>
+        </div>
+      </div>
+      <div class="panel-body" id="mode-play"><div class="turn" id="turn"></div></div>
+      <div class="panel-body" id="mode-code" hidden>
+        <div class="row" style="justify-content:space-between">
+          <div class="row">
+            <div class="segmented" role="tablist" aria-label="Language">
+              <button type="button" role="tab" data-lang="python" aria-selected="true">Python</button>
+              <button type="button" role="tab" data-lang="java" aria-selected="false">Java</button>
+            </div>
+            <select id="preset" aria-label="Start from an example">
+              <option value="">Examples…</option>
+              <option value="tens">Every 10th floor</option>
+              <option value="one">One floor at a time</option>
+              <option value="blank">Blank</option>
+            </select>
+          </div>
+          <button class="btn primary" type="button" id="run">Run</button>
+        </div>
+        <textarea id="strategy" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Strategy code"></textarea>
+        <p class="error" id="error" hidden></p>
+      </div>
+    </section>
+
+    <div style="display:grid;gap:18px;min-width:0">
+      <section class="panel" id="panel-history" aria-label="Your rounds">
+        <div class="panel-head"><span class="label">Your rounds</span><button class="btn" type="button" id="clear-history">Clear</button></div>
+        <div class="panel-body"><div id="history-best"></div><ul class="history" id="history"></ul></div>
+      </section>
+      <section class="panel" id="checker" hidden aria-label="Test every floor"></section>
+    </div>
+  </div>
+
+  <section class="panel" aria-label="Hints">
+    <div class="panel-head"><span class="label">Hints</span></div>
+    <ol class="ladder">
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">1</span><span class="t">Hint 1</span></button>
+        <div class="rung-body" hidden><p>Start with one egg. Once it breaks, it's gone, so she has to go up one floor at a time. That can take 100 drops.</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">2</span><span class="t">Hint 2</span></button>
+        <div class="rung-body" hidden><p>With two eggs, use the first to jump ahead and the second to check floor by floor inside the gap where the first one broke. Every 10th floor takes up to 19 drops. Try the <strong>Every 10th floor</strong> example and test it.</p></div></li>
+      <li class="rung"><button class="rung-btn" type="button"><span class="n">3</span><span class="t">Hint 3</span></button>
+        <div class="rung-body" hidden><p>The gaps don't have to be equal. Each jump with the first egg has already used up a drop, so make each gap one floor smaller than the last. With 10 floors: drop at 4, then 7, then 9.</p></div></li>
+      <li class="rung solution"><button class="rung-btn" type="button"><span class="n">✓</span><span class="t">Solution</span></button>
+        <div class="rung-body" hidden>
+          <p>If the first gap is <em>n</em> floors and each gap after it is one smaller, the gaps cover <em>n</em> + (<em>n</em>−1) + … + 1 = <em>n</em>(<em>n</em>+1)/2 floors. The smallest <em>n</em> that reaches 100 is <strong>14</strong> (14 × 15 / 2 = 105).</p>
+          <p>So drop the first egg from floors 14, 27, 39, 50, 60, 69, 77, 84, 90, 95, 99 and 100. When it breaks, go up floor by floor from just above the last safe floor with the second egg. Whatever the floor, that takes at most 14 drops, and no plan can promise fewer.</p>
+          <div><button class="btn" type="button" data-load-solution>Load it</button></div>
+        </div></li>
+    </ol>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="../../shared/engine.js"></script>
+<script src="../../shared/shell.js"></script>
+<script src="../../shared/strategy-lab.js"></script>
+<script src="puzzle.js"></script>
+<script>
+(() => {
+"use strict";
+const RL = window.RiddleLab, P = RL.puzzles["egg-drop"];
+const runner = new RL.Runner(P);
+const $ = id => document.getElementById(id);
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+const PRESETS = {
+  python: {
+    tens: `# drop(floor) drops a replica egg from that floor (1-100).
+#   It returns True if the egg broke, False if it survived.
+#   You have two replica eggs: once both are broken, drop() raises an error.
+# Return the highest safe floor (0 if even floor 1 breaks an egg).
+
+def find_floor(drop):
+    # first egg: every 10th floor until it breaks
+    safe, floor = 0, 10
+    while floor <= 100 and not drop(floor):
+        safe, floor = floor, floor + 10
+    # second egg: floor by floor above the last safe floor
+    for f in range(safe + 1, min(floor, 101)):
+        if drop(f):
+            return f - 1
+    return min(floor, 101) - 1
+`,
+    one: `def find_floor(drop):
+    # one floor at a time, never risking a skipped floor
+    for floor in range(1, 101):
+        if drop(floor):
+            return floor - 1
+    return 100
+`,
+    blank: `def find_floor(drop):
+    # drop(floor) returns True if the egg broke
+    ...
+`,
+    solution: `def find_floor(drop):
+    # first egg: up 14 floors, then 13, then 12... (14, 27, 39, 50, ...)
+    safe, gap = 0, 14
+    while True:
+        floor = min(safe + gap, 100)
+        if drop(floor):
+            break
+        safe = floor
+        if safe == 100:
+            return 100
+        gap -= 1
+    # second egg: floor by floor between the last safe floor and where it broke
+    for f in range(safe + 1, floor):
+        if drop(f):
+            return f - 1
+    return floor - 1
+`,
+  },
+  java: {
+    tens: `class Strategy {
+    // building.drop(floor) drops a replica egg from that floor (1-100).
+    //   It returns true if the egg broke, false if it survived.
+    //   You have two replica eggs: once both are broken, drop() throws.
+    // Return the highest safe floor (0 if even floor 1 breaks an egg).
+    static int findFloor(Building building) {
+        // first egg: every 10th floor until it breaks
+        int safe = 0, floor = 10;
+        while (floor <= 100 && !building.drop(floor)) {
+            safe = floor;
+            floor += 10;
+        }
+        // second egg: floor by floor above the last safe floor
+        int top = Math.min(floor, 101);
+        for (int f = safe + 1; f < top; f++) {
+            if (building.drop(f)) return f - 1;
+        }
+        return top - 1;
+    }
+}
+`,
+    one: `class Strategy {
+    static int findFloor(Building building) {
+        // one floor at a time, never risking a skipped floor
+        for (int floor = 1; floor <= 100; floor++) {
+            if (building.drop(floor)) return floor - 1;
+        }
+        return 100;
+    }
+}
+`,
+    blank: `class Strategy {
+    // building.drop(floor) returns true if the egg broke
+    static int findFloor(Building building) {
+        return 0;
+    }
+}
+`,
+    solution: `class Strategy {
+    static int findFloor(Building building) {
+        // first egg: up 14 floors, then 13, then 12... (14, 27, 39, 50, ...)
+        int safe = 0, gap = 14, floor;
+        while (true) {
+            floor = Math.min(safe + gap, 100);
+            if (building.drop(floor)) break;
+            safe = floor;
+            if (safe == 100) return 100;
+            gap--;
+        }
+        // second egg: floor by floor between the last safe floor and where it broke
+        for (int f = safe + 1; f < floor; f++) {
+            if (building.drop(f)) return f - 1;
+        }
+        return floor - 1;
+    }
+}
+`,
+  },
+};
+
+// Python: run find_floor once for every highest safe floor, with a drop() that keeps
+// the rules, and record what it did. Errors point at the player's line, not ours.
+const HARNESS = `
+import json, traceback
+class __EggRule(Exception):
+    pass
+def __run_all(crits_json):
+    out = []
+    for crit in json.loads(crits_json):
+        drops, eggs = [], [2]
+        def drop(floor):
+            if not eggs[0]:
+                raise __EggRule("Both replica eggs are already broken.")
+            if isinstance(floor, bool) or not isinstance(floor, int) or not 1 <= floor <= 100:
+                raise __EggRule(f"drop() needs a floor from 1 to 100, but got {floor!r}.")
+            if len(drops) >= 200:
+                raise __EggRule("More than 200 drops.")
+            drops.append(floor)
+            if floor > crit:
+                eggs[0] -= 1
+                return True
+            return False
+        try:
+            answer = find_floor(drop)
+            whole = isinstance(answer, int) and not isinstance(answer, bool)
+            out.append({"drops": drops, "answer": answer if whole else repr(answer)})
+        except Exception as e:
+            mine = [f for f in traceback.extract_tb(e.__traceback__) if f.name not in ("drop", "__run_all")]
+            message = str(e) if isinstance(e, __EggRule) else f"{type(e).__name__}: {e}"
+            out.append({"drops": drops, "error": message, "line": mine[-1].lineno if mine else 0})
+    return json.dumps(out)
+`;
+
+const randomFloor = () => Math.floor(Math.random() * (P.FLOORS + 1));
+let mode = "play", history = [], crit = randomFloor();
+let unlucky = store.get("riddle-lab:egg-drop:unlucky") === "1";
+$("unlucky").checked = unlucky;
+
+// ---------- Drawing the building ----------
+const FH = 6, TOP = 40, LEFT = 44, WIDE = 150, W = 300;
+const GROUND = TOP + P.FLOORS * FH, H = GROUND + 22;
+const floorY = f => TOP + (P.FLOORS - f) * FH;          // top edge of floor f
+const DROP_X = LEFT + WIDE + 22;
+let hover = null, fall = null;
+
+function eggShape(cx, cy, s, cls = "") {
+  return `<path class="${cls}" d="M${cx},${cy - 7 * s} C${cx + 5.2 * s},${cy - 7 * s} ${cx + 6 * s},${cy + 1 * s} ${cx + 6 * s},${cy + 2.3 * s} C${cx + 6 * s},${cy + 6 * s} ${cx + 3.3 * s},${cy + 8 * s} ${cx},${cy + 8 * s} C${cx - 3.3 * s},${cy + 8 * s} ${cx - 6 * s},${cy + 6 * s} ${cx - 6 * s},${cy + 2.3 * s} C${cx - 6 * s},${cy + 1 * s} ${cx - 5.2 * s},${cy - 7 * s} ${cx},${cy - 7 * s} Z" fill="var(--egg)" stroke="var(--egg-edge)" stroke-width="${1.2 * s}"/>`;
+}
+function splat(cx, cy) {
+  return `<ellipse cx="${cx}" cy="${cy - 1}" rx="13" ry="3.2" fill="var(--egg)" stroke="var(--egg-edge)"/>
+    <circle cx="${cx + 1}" cy="${cy - 2}" r="3.4" fill="var(--yolk)"/>
+    <path d="M${cx - 12},${cy - 3} l3,-5 l2,3 l2,-4 M${cx + 8},${cy - 3} l2,-5 l2,3 l3,-3" fill="none" stroke="var(--egg-edge)" stroke-width="1.2"/>`;
+}
+
+function render() {
+  const s = runner.state, done = !!runner.result;
+  const showCrit = s.crit !== null && (mode === "code" || done);
+  const svg = $("tower");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.classList.toggle("clickable", mode === "play" && !done);
+  let o = "";
+  // roof and sign
+  o += `<rect x="${LEFT + 20}" y="${TOP - 26}" width="${WIDE - 40}" height="18" rx="3" fill="var(--roof)"/>`;
+  o += `<text x="${LEFT + WIDE / 2}" y="${TOP - 13.5}" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--on-ink)">FABERGÉ MUSEUM</text>`;
+  o += `<rect x="${LEFT - 3}" y="${TOP - 7}" width="${WIDE + 6}" height="7" rx="2" fill="var(--roof)"/>`;
+  // facade, then what's known: safe floors from the ground up, breaking floors from the top down
+  o += `<rect x="${LEFT}" y="${TOP}" width="${WIDE}" height="${P.FLOORS * FH}" fill="var(--facade)" stroke="var(--facade-edge)"/>`;
+  if (s.safe > 0) o += `<rect x="${LEFT}" y="${floorY(s.safe)}" width="${WIDE}" height="${s.safe * FH}" fill="var(--safe-tint)" opacity="0.38"/>`;
+  if (s.broken <= P.FLOORS) o += `<rect x="${LEFT}" y="${TOP}" width="${WIDE}" height="${(P.FLOORS - s.broken + 1) * FH}" fill="var(--break-tint)" opacity="0.38"/>`;
+  // windows, one row per floor
+  let win = "";
+  for (let f = 1; f <= P.FLOORS; f++) {
+    const y = floorY(f) + 1.5;
+    for (let c = 0; c < 9; c++) win += `M${LEFT + 9 + c * 15.5},${y}h8v3h-8z`;
+  }
+  o += `<path d="${win}" fill="var(--window)" opacity="0.85"/>`;
+  // floor numbers every 10
+  for (let f = 10; f <= P.FLOORS; f += 10) {
+    o += `<line x1="${LEFT - 5}" x2="${LEFT}" y1="${floorY(f) + FH / 2}" y2="${floorY(f) + FH / 2}" stroke="var(--muted)"/>`;
+    o += `<text x="${LEFT - 8}" y="${floorY(f) + FH / 2 + 3.5}" text-anchor="end" font-size="10" fill="var(--muted)">${f}</text>`;
+  }
+  // ground and truck
+  o += `<rect x="0" y="${GROUND}" width="${W}" height="3" fill="var(--ground)"/>`;
+  o += `<g transform="translate(${W - 58} ${GROUND - 24})"><rect x="0" y="0" width="34" height="18" rx="2" fill="var(--truck)"/><path d="M34,6 h10 l8,7 v5 h-18 z" fill="var(--truck)"/><path d="M36,8 h7 l5,5 h-12z" fill="var(--surface)" opacity="0.8"/><circle cx="9" cy="20" r="4" fill="var(--ink)"/><circle cx="43" cy="20" r="4" fill="var(--ink)"/></g>`;
+  // drop marks on the right wall: green survived, red broke
+  s.drops.forEach(d => {
+    const y = floorY(d.floor) + FH / 2;
+    o += `<line x1="${LEFT + WIDE}" x2="${LEFT + WIDE + 9}" y1="${y}" y2="${y}" stroke="var(${d.broke ? "--break-tint" : "--safe-tint"})" stroke-width="2.4" stroke-linecap="round"/>`;
+  });
+  const last = s.drops[s.drops.length - 1];
+  if (last) o += `<text x="${LEFT + WIDE + 12}" y="${floorY(last.floor) + FH / 2 + 3.5}" font-size="10" font-weight="600" fill="var(--ink)">${last.floor}</text>`;
+  // the answer, once it's fair to show it
+  if (showCrit) {
+    const y = floorY(s.crit);   // the line between the highest safe floor and the one above
+    o += `<line x1="${LEFT - 3}" x2="${LEFT + WIDE + 3}" y1="${y}" y2="${y}" stroke="var(--crit)" stroke-width="2.5" stroke-dasharray="6 3"/>`;
+  }
+  o += `<g id="hover" pointer-events="none"></g><g id="falling" pointer-events="none"></g>`;
+  svg.innerHTML = o;
+  drawHover();
+  drawFall(performance.now());
+  renderCard();
+}
+
+function drawHover() {
+  const g = $("hover");
+  if (!g) return;
+  if (hover === null) { g.innerHTML = ""; return; }
+  const y = floorY(hover);
+  g.innerHTML = `<rect x="${LEFT - 2}" y="${y - 0.5}" width="${WIDE + 4}" height="${FH + 1}" fill="none" stroke="var(--ink)" stroke-width="1.6" rx="1"/>
+    <rect x="${LEFT + WIDE + 6}" y="${y + FH / 2 - 9}" width="58" height="18" rx="4" fill="var(--ink)"/>
+    <text x="${LEFT + WIDE + 35}" y="${y + FH / 2 + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--on-ink)">Floor ${hover}</text>`;
+}
+
+// The last egg falls from its window to the pavement, then lands whole or splats.
+const fallMs = f => (reducedMotion ? 0 : 260 + f * 3.4);
+function drawFall(now) {
+  const g = $("falling");
+  if (!g || !fall) { if (g) g.innerHTML = ""; return; }
+  const t = Math.min(1, (now - fall.t0) / fallMs(fall.floor));
+  const y0 = floorY(fall.floor) + FH / 2, y = y0 + (GROUND - 8 - y0) * t * t;
+  g.innerHTML = t < 1 ? eggShape(DROP_X, y, 0.9)
+    : fall.broke ? splat(DROP_X, GROUND) : eggShape(DROP_X, GROUND - 8, 0.9);
+  fall.landed = t >= 1;
+}
+
+function renderCard() {
+  const s = runner.state, r = runner.result;
+  $("drops-num").textContent = s.drops.length;
+  $("eggs").innerHTML = Array.from({ length: P.EGGS }, (_, i) => {
+    const left = i < s.eggs;
+    return `<svg viewBox="-8 -9 16 19" aria-label="${left ? "replica egg" : "broken egg"}"${left ? "" : ` opacity="0.5"`}>${eggShape(0, 0, 1, "")}${left ? "" : `<path d="M-6,1 l3,-2 l2,3 l3,-3 l2,2 l2,-2" fill="none" stroke="var(--bad)" stroke-width="1.6"/>`}</svg>`;
+  }).join("");
+  const range = $("range");
+  if (s.plan && s.answer !== null) range.innerHTML = `find_floor returned <strong>${s.answer}</strong>. The highest safe floor is <strong>${s.crit}</strong>.`;
+  else if (r && r.ok) range.innerHTML = s.safe ? `Highest safe floor: <strong>${s.safe}</strong>` : `<strong>Even floor 1</strong> breaks an egg`;
+  else range.innerHTML = s.broken - s.safe - 1 === P.FLOORS
+    ? `The highest safe floor could be anything from <strong>0</strong> to <strong>100</strong>.`
+    : `The highest safe floor is somewhere from <strong>${s.safe}</strong> to <strong>${s.broken - 1}</strong>.`;
+  const o = $("outcome");
+  if (r) { o.textContent = `${outcomeText(r, s)} ${r.ok ? "✓" : "✕"}`; o.className = `outcome ${r.ok ? "ok" : "bad"}`; }
+  else { o.textContent = ""; o.className = "outcome"; }
+  $("log").innerHTML = s.drops.map((d, i) => `<li><span class="n">${i + 1}.</span><span class="f">Floor ${d.floor}</span><span class="${d.broke ? "bad" : "ok"}">${d.broke ? "broke" : "survived"}</span></li>`).join("");
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+// Short form of a finished round, for the status and the card.
+function outcomeText(r, s) {
+  if (s.plan) return r.ok ? `Right after ${s.drops.length} drops` : "Wrong floor";
+  return r.ok ? `Found in ${s.drops.length} drops` : "Out of eggs";
+}
+
+function setStatus(state, text) { $("status").dataset.state = state; $("status-text").textContent = text; }
+
+// ---------- Clicking a floor ----------
+function floorAt(e) {
+  const svg = $("tower"), pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  if (p.x < LEFT - 30 || p.x > LEFT + WIDE + 10 || p.y < TOP || p.y >= GROUND) return null;
+  return P.FLOORS - Math.floor((p.y - TOP) / FH);
+}
+const canDrop = f => mode === "play" && !runner.result && f !== null && f > runner.state.safe && f < runner.state.broken;
+$("tower").addEventListener("mousemove", e => {
+  const f = floorAt(e), h = canDrop(f) ? f : null;
+  if (h !== hover) { hover = h; drawHover(); }
+});
+$("tower").addEventListener("mouseleave", () => { hover = null; drawHover(); });
+$("tower").addEventListener("click", e => { const f = floorAt(e); if (canDrop(f)) dropFrom(f); });
+
+function dropFrom(f) {
+  runner.step(1, f);
+  const d = runner.state.drops[runner.state.drops.length - 1];
+  if (d && d.floor === f) { fall = { floor: f, broke: d.broke, t0: performance.now() }; drawFall(fall.t0); }
+}
+
+// ---------- Play mode ----------
+function renderTurn() {
+  const el = $("turn"), s = runner.state, r = runner.result;
+  if (r) {
+    el.innerHTML = `<h3>${r.ok ? "Found the floor!" : "Out of eggs"}</h3>
+      <p>${r.text}${s.unlucky ? " The unlucky museum chose the worst answer every time." : ""}</p>
+      ${r.ok && s.drops.length > P.BEST ? `<p>Could you guarantee fewer? Try the <strong>Unlucky museum</strong> to see your plan's worst case.</p>` : ""}
+      ${!r.ok ? `<p>It was floor ${s.crit}. With one egg left, skipping a floor risks losing it.</p>` : ""}
+      <div class="answer"><button class="btn primary" type="button" id="again">Play again</button></div>`;
+    $("again").addEventListener("click", newRound);
+    return;
+  }
+  const first = !s.drops.length;
+  el.innerHTML = `<h3>${first ? "Where will you drop the first egg?" : `${s.eggs === 2 ? "Both eggs still whole" : "Last egg"}: pick the next floor`}</h3>
+    <p>${first ? "Click a floor on the building, or type one." : "Click a floor that isn't known yet."}
+    ${unlucky ? "The unlucky museum is on: it answers each drop in whichever way costs you the most." : ""}</p>
+    <form class="answer" id="drop-form"><input type="number" id="drop-floor" min="${s.safe + 1}" max="${s.broken - 1}" placeholder="${s.safe + 1}–${s.broken - 1}" aria-label="Floor to drop from" required><button class="btn primary" type="submit">Drop egg</button></form>`;
+  $("drop-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const f = Math.trunc(+$("drop-floor").value);
+    if (canDrop(f)) dropFrom(f);
+  });
+}
+
+function renderHistory() {
+  if (!history.length) { $("history-best").innerHTML = `<p class="hint">Finish a round to see your drops.</p>`; $("history").innerHTML = ""; return; }
+  const unluckyWins = history.filter(h => h.ok && h.unlucky).map(h => h.drops);
+  $("history-best").innerHTML = unluckyWins.length
+    ? `<div class="big">${Math.min(...unluckyWins)}<small>fewest drops against the unlucky museum</small></div>`
+    : `<div class="big">${history.filter(h => h.ok).length} / ${history.length}<small>floors found</small></div>`;
+  $("history").innerHTML = history.slice(0, 6).map((h, i) =>
+    `<li><span>Round ${history.length - i}${h.unlucky ? " · unlucky" : ""}</span><span>${h.ok ? `✓ ${h.drops} drops` : "✕ out of eggs"}</span></li>`).join("");
+}
+$("clear-history").addEventListener("click", () => { history = []; renderHistory(); });
+
+// ---------- Code mode ----------
+let lang = store.get("riddle-lab:egg-drop:lang") === "java" ? "java" : "python";
+const codeKey = () => `riddle-lab:egg-drop:${lang}`;
+let busy = false;
+const editor = RL.codeEditor($("strategy"), { lang, onChange: () => onEdit() });
+
+function showError(msg, line) {
+  $("error").hidden = !msg;
+  $("error").textContent = msg ? (line ? `Line ${line}: ${msg}` : msg) : "";
+  editor.markError(msg ? line : 0);
+  if (msg) setStatus("error", "Strategy error");
+}
+function onEdit() { store.set(codeKey(), editor.get()); showError(""); checker.clear(); }
+
+// Run the player's find_floor once for each of these highest safe floors and return the
+// recorded runs as a strategy the runner can replay drop by drop.
+async function strategyFor(crits) {
+  if (busy) return null;
+  busy = true; $("run").disabled = true;
+  setStatus("running", lang === "java" ? "Compiling Java…" : RL.python.loaded ? "Running Python…" : "Loading Python…");
+  try {
+    const answers = lang === "java"
+      ? await RL.runJava("eggdrop", editor.get(), crits)
+      : await RL.python.run({ source: editor.get(), harness: HARNESS, required: ["find_floor"], payload: crits });
+    showError("");
+    setStatus("ready", "Ready");
+    return P.fromAnswers(crits, answers);
+  } catch (e) {
+    showError(e.message || String(e), e.line);
+    return null;
+  } finally {
+    busy = false; $("run").disabled = false;
+  }
+}
+
+async function runCurrent(stopAtMistake = false) {
+  const strategy = await strategyFor([crit]);
+  if (!strategy) return;
+  runner.load(strategy, { crit }, { stopAtMistake });
+  runner.speed = reducedMotion ? 1000 : 1.6;
+  runner.play();
+}
+
+function setLang(l) {
+  lang = l;
+  store.set("riddle-lab:egg-drop:lang", l);
+  document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-selected", b.dataset.lang === l));
+  editor.setLang(l);
+  editor.set(store.get(codeKey()) ?? PRESETS[l].tens);
+  showError(""); checker.clear();
+  if (l === "python" && mode === "code") RL.python.warm();
+}
+document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
+$("preset").addEventListener("change", e => { if (e.target.value) editor.set(PRESETS[lang][e.target.value]); e.target.value = ""; });
+$("run").addEventListener("click", () => {
+  if (runner.playing) runner.pause();
+  else if (runner.state.plan && !runner.finished && runner.state.drops.length) runner.play();
+  else runCurrent();
+});
+document.addEventListener("shell:load-solution", () => { setMode("code"); editor.set(PRESETS[lang].solution); });
+
+// ---------- Checker ----------
+const CRITS = P.cases().map(c => c.crit);
+const replay = c => {
+  crit = c.crit;
+  $("tower").scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+  runCurrent(true);
+};
+const checker = RL.mountChecker($("checker"), {
+  buttonLabel: `Test all ${CRITS.length} floors`,
+  intro: `Try every highest safe floor from 0 (even floor 1 breaks an egg) to 100, and chart how many drops each one takes.`,
+  run: async () => {
+    const strategy = await strategyFor(CRITS);
+    if (!strategy) return null;
+    try { return RL.checkAll(P, strategy); } catch (e) { showError(e.message, e.line); return null; }
+  },
+  onBar: c => c && replay(c),
+  onReplay: replay,
+});
+
+// ---------- One update for every runner event ----------
+runner.on((e) => {
+  const s = runner.state;
+  // in code mode each step is a drop the strategy made: animate it
+  if (e.type === "step" && mode === "code" && s.drops.length) {
+    const d = s.drops[s.drops.length - 1];
+    if (!fall || fall.n !== s.drops.length) fall = { floor: d.floor, broke: d.broke, t0: performance.now(), n: s.drops.length };
+  }
+  if (e.type === "load") fall = null;
+  hover = null;
+  render();
+  const r = runner.result, callout = $("callout");
+  callout.hidden = true;
+  if (runner.error) { showError(runner.error.message, runner.error.line); return; }
+  if (mode === "play") {
+    renderTurn();
+    if (r) {
+      if (!s.counted) { s.counted = true; history.unshift({ ok: r.ok, drops: s.drops.length, unlucky: s.unlucky }); renderHistory(); }
+      setStatus(r.ok ? "good" : "fail", outcomeText(r, s));
+    } else setStatus("running", s.drops.length ? `${s.drops.length} drop${s.drops.length === 1 ? "" : "s"} so far` : "Your turn");
+    return;
+  }
+  $("run").textContent = runner.playing ? "Pause" : "Run";
+  if (runner.mistake) {
+    callout.hidden = false;
+    callout.innerHTML = `<b>✕ ${runner.mistake}</b><span>Highest safe floor: ${s.crit}.</span>`;
+    setStatus("fail", r && !r.ok ? outcomeText(r, s) : "Too many drops");
+  } else if (r) setStatus(r.ok ? "good" : "fail", outcomeText(r, s));
+  else if (s.drops.length) setStatus("running", `Drop ${s.drops.length}: floor ${s.drops[s.drops.length - 1].floor}`);
+  else setStatus("ready", `Highest safe floor: ${crit}`);
+});
+
+// ---------- Mode and rounds ----------
+function setMode(m) {
+  mode = m;
+  $("tab-play").setAttribute("aria-selected", m === "play");
+  $("tab-code").setAttribute("aria-selected", m === "code");
+  $("mode-play").hidden = m !== "play";
+  $("mode-code").hidden = m !== "code";
+  $("panel-history").hidden = m !== "play";
+  $("checker").hidden = m !== "code";
+  $("unlucky-wrap").hidden = m !== "play";
+  if (m === "code") editor.refresh();
+  if (m === "code" && lang === "python") RL.python.warm();
+  resetRound();
+}
+$("tab-play").addEventListener("click", () => setMode("play"));
+$("tab-code").addEventListener("click", () => setMode("code"));
+
+$("unlucky").addEventListener("change", e => {
+  unlucky = e.target.checked;
+  store.set("riddle-lab:egg-drop:unlucky", unlucky ? "1" : "0");
+  resetRound();
+});
+
+function resetRound() { runner.load(null, { crit, unlucky: mode === "play" && unlucky }); }
+function newRound() { crit = randomFloor(); resetRound(); }
+$("new-round").addEventListener("click", newRound);
+
+let last = 0;
+(function loop(t) {
+  runner.tick(Math.min(100, t - (last || t))); last = t;
+  if (fall && !fall.landed) drawFall(t);
+  requestAnimationFrame(loop);
+})(performance.now());
+
+renderHistory();
+setLang(lang);
+setMode("play");
+})();
+</script>
+</body>
+</html>

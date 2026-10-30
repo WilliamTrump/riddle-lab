@@ -165,3 +165,31 @@ input[type="range"] { width: 100%; accent-color: var(--ink); }
 .callout { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border-top: 1px solid var(--rule); font-size: 14px; background: color-mix(in srgb, var(--bad) 6%, var(--surface)); }
 .callout b { color: var(--bad); font-weight: 600; }
 .callout span { color: var(--ink-2); }
+
+/* Code editor (CodeMirror) in Riddle Lab colors */
+:root { --syn-keyword: #7A45B5; --syn-def: #2F68C8; --syn-string: #1E7F47; --syn-number: #B5541C; --syn-builtin: #0E7383; --syn-type: #A2366F; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
+}
+:root[data-theme="dark"] { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
+.cm-s-riddle.CodeMirror {
+  height: 340px; border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden;
+  background: var(--surface-2); color: var(--ink); font: 13.5px/1.6 var(--font-mono);
+}
+.cm-s-riddle.CodeMirror-focused { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.cm-s-riddle .CodeMirror-gutters { background: var(--surface-2); border-right: 1px solid var(--rule); }
+.cm-s-riddle .CodeMirror-linenumber { color: var(--muted); padding: 0 10px 0 8px; }
+.cm-s-riddle .CodeMirror-cursor { border-left: 2px solid var(--ink); }
+.cm-s-riddle .CodeMirror-selected, .cm-s-riddle.CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--focus) 24%, transparent); }
+.cm-s-riddle .CodeMirror-lines { padding: 10px 0; }
+.cm-s-riddle .cm-keyword { color: var(--syn-keyword); font-weight: 600; }
+.cm-s-riddle .cm-def { color: var(--syn-def); font-weight: 500; }
+.cm-s-riddle .cm-string, .cm-s-riddle .cm-string-2 { color: var(--syn-string); }
+.cm-s-riddle .cm-number, .cm-s-riddle .cm-atom { color: var(--syn-number); }
+.cm-s-riddle .cm-comment { color: var(--muted); font-style: italic; }
+.cm-s-riddle .cm-builtin, .cm-s-riddle .cm-meta { color: var(--syn-builtin); }
+.cm-s-riddle .cm-type, .cm-s-riddle .cm-variable-3 { color: var(--syn-type); }
+.cm-s-riddle .cm-operator, .cm-s-riddle .cm-bracket { color: var(--ink-2); }
+.cm-s-riddle .cm-variable, .cm-s-riddle .cm-variable-2, .cm-s-riddle .cm-property { color: var(--ink); }
+.cm-s-riddle .CodeMirror-matchingbracket { color: var(--ink) !important; background: color-mix(in srgb, var(--focus) 20%, transparent); text-decoration: none; }
+.cm-s-riddle .cm-error-line { background: color-mix(in srgb, var(--bad) 15%, transparent); }

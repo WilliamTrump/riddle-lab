@@ -66,33 +66,6 @@
 .big small { font: 500 14px var(--font-body); color: var(--muted); margin-left: 6px; }
 .error { color: var(--bad); margin: 0; font: 13px/1.5 var(--font-mono); white-space: pre-wrap; }
 .callout .facts { font-size: 13px; }
-/* Code editor (CodeMirror) in Riddle Lab colors */
-:root { --syn-keyword: #7A45B5; --syn-def: #2F68C8; --syn-string: #1E7F47; --syn-number: #B5541C; --syn-builtin: #0E7383; --syn-type: #A2366F; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
-}
-:root[data-theme="dark"] { --syn-keyword: #B997E8; --syn-def: #6FA2EE; --syn-string: #5CC48A; --syn-number: #E8935F; --syn-builtin: #4FC3D2; --syn-type: #E486C0; }
-.cm-s-riddle.CodeMirror {
-  height: 340px; border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden;
-  background: var(--surface-2); color: var(--ink); font: 13.5px/1.6 var(--font-mono);
-}
-.cm-s-riddle.CodeMirror-focused { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
-.cm-s-riddle .CodeMirror-gutters { background: var(--surface-2); border-right: 1px solid var(--rule); }
-.cm-s-riddle .CodeMirror-linenumber { color: var(--muted); padding: 0 10px 0 8px; }
-.cm-s-riddle .CodeMirror-cursor { border-left: 2px solid var(--ink); }
-.cm-s-riddle .CodeMirror-selected, .cm-s-riddle.CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--focus) 24%, transparent); }
-.cm-s-riddle .CodeMirror-lines { padding: 10px 0; }
-.cm-s-riddle .cm-keyword { color: var(--syn-keyword); font-weight: 600; }
-.cm-s-riddle .cm-def { color: var(--syn-def); font-weight: 500; }
-.cm-s-riddle .cm-string, .cm-s-riddle .cm-string-2 { color: var(--syn-string); }
-.cm-s-riddle .cm-number, .cm-s-riddle .cm-atom { color: var(--syn-number); }
-.cm-s-riddle .cm-comment { color: var(--muted); font-style: italic; }
-.cm-s-riddle .cm-builtin, .cm-s-riddle .cm-meta { color: var(--syn-builtin); }
-.cm-s-riddle .cm-type, .cm-s-riddle .cm-variable-3 { color: var(--syn-type); }
-.cm-s-riddle .cm-operator, .cm-s-riddle .cm-bracket { color: var(--ink-2); }
-.cm-s-riddle .cm-variable, .cm-s-riddle .cm-variable-2, .cm-s-riddle .cm-property { color: var(--ink); }
-.cm-s-riddle .CodeMirror-matchingbracket { color: var(--ink) !important; background: color-mix(in srgb, var(--focus) 20%, transparent); text-decoration: none; }
-.cm-s-riddle .cm-error-line { background: color-mix(in srgb, var(--bad) 15%, transparent); }
 </style>
 </head>
 <body>
@@ -203,6 +176,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="../../shared/engine.js"></script>
 <script src="../../shared/shell.js"></script>
+<script src="../../shared/strategy-lab.js"></script>
 <script src="puzzle.js"></script>
 <script>
 (() => {
@@ -406,44 +380,17 @@ let lang = store.get("riddle-lab:hats:lang") === "java" ? "java" : "python";
 const codeKey = () => `riddle-lab:hats:${lang}`;
 let busy = false;
 
-// The editor: CodeMirror (indentation, colors, brackets) when it loads, else the plain text box.
-const textarea = $("strategy");
-const MODES = { python: { name: "python", version: 3 }, java: "text/x-java" };
-const cm = window.CodeMirror ? CodeMirror.fromTextArea(textarea, {
-  theme: "riddle", mode: MODES[lang], lineNumbers: true, indentUnit: 4, tabSize: 4,
-  matchBrackets: true, autoCloseBrackets: true, electricChars: true,
-  extraKeys: {
-    Tab: c => c.somethingSelected() ? c.indentSelection("add") : c.replaceSelection(" ".repeat(c.getOption("indentUnit")), "end"),
-    "Shift-Tab": c => c.indentSelection("subtract"),
-  },
-}) : null;
-const editor = {
-  get: () => (cm ? cm.getValue() : textarea.value),
-  set(v) {
-    if (cm) { cm.setValue(v); cm.clearHistory(); }   // setValue fires "change"
-    else { textarea.value = v; onEdit(); }
-  },
-};
-let errMark = null;
-function markErrorLine(line) {
-  if (!cm) return;
-  if (errMark) { cm.removeLineClass(errMark, "background", "cm-error-line"); errMark = null; }
-  if (line > 0 && line <= cm.lineCount()) errMark = cm.addLineClass(line - 1, "background", "cm-error-line");
-}
+const editor = RL.codeEditor($("strategy"), { lang, onChange: () => onEdit() });
 
 function showError(msg, line) {
   $("error").hidden = !msg;
   $("error").textContent = msg ? (line ? `Line ${line}: ${msg}` : msg) : "";
-  markErrorLine(msg ? line : 0);
+  editor.markError(msg ? line : 0);
   if (msg) setStatus("error", "Strategy error");
 }
 
-// Python runs in a worker (Pyodide) so a stuck strategy can be stopped.
-const python = (() => {
-  const CDN = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
-  const SRC = `importScripts("${CDN}pyodide.js");
-const ready = loadPyodide({ indexURL: "${CDN}" });
-const HARNESS = \`
+// Python: walk every lineup, asking guess() for each prisoner in turn.
+const HARNESS = `
 import json
 def __run_all(lineups_json):
     out = []
@@ -453,81 +400,17 @@ def __run_all(lineups_json):
             heard.append(guess(list(lineup[i + 1:]), list(heard)))
         out.append(heard)
     return json.dumps(out)
-\`;
-ready.then(() => postMessage({ ready: true }), e => postMessage({ fatal: String(e) }));
-onmessage = async ({ data }) => {
-  try {
-    const py = await ready;
-    const ns = py.globals.get("dict")();
-    py.runPython(data.source, { globals: ns });
-    if (!ns.has("guess")) throw new Error("Write a function: def guess(seen, heard):");
-    py.runPython(HARNESS, { globals: ns });
-    postMessage({ id: data.id, guesses: JSON.parse(ns.get("__run_all")(JSON.stringify(data.lineups))) });
-  } catch (e) {
-    const text = String(e.message || e).trim();
-    // the last frame in the player's code (not the harness) gives the line
-    const frames = [...text.matchAll(/File "<exec>", line (\\d+)(?:, in (\\S+))?/g)];
-    const last = frames[frames.length - 1];
-    const line = last && last[2] !== "__run_all" ? +last[1] : 0;
-    postMessage({ id: data.id, error: text.split("\\n").pop(), line });
-  }
-};`;
-  let worker = null, ready = null, loaded = false, nextId = 0;
-  function start() {
-    worker = new Worker(URL.createObjectURL(new Blob([SRC], { type: "text/javascript" })));
-    const failed = { message: "Python couldn't load. Check your internet connection." };
-    ready = new Promise((res, rej) => {
-      worker.addEventListener("message", function once(e) {
-        if (e.data.ready) { worker.removeEventListener("message", once); loaded = true; res(); }
-        else if (e.data.fatal) rej(failed);
-      });
-      worker.addEventListener("error", () => rej(failed));
-    });
-    ready.catch(() => { worker = null; });
-  }
-  return {
-    warm() { if (!worker) start(); },
-    get loaded() { return loaded; },
-    async run(source, lineups) {
-      if (!worker) start();
-      await ready;
-      const id = ++nextId;
-      return new Promise((res, rej) => {
-        const timer = setTimeout(() => {
-          worker.terminate(); worker = null; loaded = false;
-          rej({ message: "Took longer than 10 seconds. Is there an endless loop?" });
-        }, 10000);
-        worker.addEventListener("message", function on(e) {
-          if (e.data.id !== id) return;
-          worker.removeEventListener("message", on); clearTimeout(timer);
-          e.data.error ? rej({ message: e.data.error, line: e.data.line }) : res(e.data.guesses);
-        });
-        worker.postMessage({ id, source, lineups });
-      });
-    },
-  };
-})();
-
-// Java is compiled and run by server.py with your own javac.
-async function runJava(source, lineups) {
-  const needServer = { message: "Java needs the local server. Run: python3 server.py" };
-  let res;
-  try {
-    res = await fetch("/api/hats/java", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, lineups }) });
-  } catch { throw needServer; }
-  if (!res.ok) throw res.status === 404 || res.status === 501 ? needServer : { message: `The server said ${res.status}.` };
-  const data = await res.json();
-  if (data.error) throw { message: data.error, line: data.line };
-  return data.guesses;
-}
+`;
 
 // Run the player's code on these lineups and return a guess(seen, heard) for the engine.
 async function strategyFor(lineups) {
   if (busy) return null;
   busy = true; $("run").disabled = true;
-  setStatus("running", lang === "java" ? "Compiling Java…" : python.loaded ? "Running Python…" : "Loading Python…");
+  setStatus("running", lang === "java" ? "Compiling Java…" : RL.python.loaded ? "Running Python…" : "Loading Python…");
   try {
-    const answers = await (lang === "java" ? runJava : python.run)(editor.get(), lineups);
+    const answers = lang === "java"
+      ? await RL.runJava("hats", editor.get(), lineups)
+      : await RL.python.run({ source: editor.get(), harness: HARNESS, required: ["guess"], payload: lineups });
     showError("");
     setStatus("ready", "Ready");
     return P.fromGuesses(lineups, answers);
@@ -551,21 +434,14 @@ function setLang(l) {
   lang = l;
   store.set("riddle-lab:hats:lang", l);
   document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-selected", b.dataset.lang === l));
-  if (cm) cm.setOption("mode", MODES[l]);
+  editor.setLang(l);
   editor.set(store.get(codeKey()) ?? PRESETS[l].black);
   showError(""); checker.clear();
-  if (l === "python" && mode === "code") python.warm();
+  if (l === "python" && mode === "code") RL.python.warm();
 }
 document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
 
 function onEdit() { store.set(codeKey(), editor.get()); showError(""); checker.clear(); }
-if (cm) cm.on("change", onEdit);
-else {
-  textarea.addEventListener("input", onEdit);
-  textarea.addEventListener("keydown", e => {
-    if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); textarea.setRangeText("    ", textarea.selectionStart, textarea.selectionEnd, "end"); onEdit(); }
-  });
-}
 $("preset").addEventListener("change", e => {
   if (e.target.value) editor.set(PRESETS[lang][e.target.value]);
   e.target.value = "";
@@ -635,8 +511,8 @@ function setMode(m) {
   $("mode-code").hidden = m !== "code";
   $("panel-history").hidden = m !== "play";
   $("checker").hidden = m !== "code";
-  if (m === "code" && cm) cm.refresh();   // it was sized while hidden
-  if (m === "code" && lang === "python") python.warm();
+  if (m === "code") editor.refresh();   // it was sized while hidden
+  if (m === "code" && lang === "python") RL.python.warm();
   resetRound();
 }
 $("tab-play").addEventListener("click", () => setMode("play"));

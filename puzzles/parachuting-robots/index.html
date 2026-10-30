@@ -357,11 +357,16 @@ const gapValue = () => {
   return Math.min(200, Math.max(1, Number.isFinite(g) ? g : 6));
 };
 const cps = () => Math.round(10 ** (Number($("speed").value) / 100 * 3));
+const lingerCycles = () => Math.round(cps() * 1.5);   // at least 1.5 s more once they can never meet
 
 function reset(animateLanding = true, note = "") {
   const g = gapValue();
   $("gap").value = g;
-  if (program) runner.load(program, g); else { runner.state = null; runner.playing = false; }
+  if (program) {
+    runner.load(program, g);
+    runner.state.linger = 2;   // when they can never meet, keep showing it for twice as long
+    runner.state.lingerMin = lingerCycles();
+  } else { runner.state = null; runner.playing = false; }
   draw = [0, g].map(p => ({ from: p, to: p, t0: 0, dur: 0 }));
   landT0 = animateLanding ? performance.now() : -Infinity;
   cam = null;
@@ -417,7 +422,7 @@ function updateUI() {
 $("play").addEventListener("click", togglePlay);
 $("step").addEventListener("click", () => { runner.pause(); landT0 = -Infinity; runner.speed = cps(); runner.step(1); });
 $("reset").addEventListener("click", () => reset(true));
-$("speed").addEventListener("input", () => { runner.speed = cps(); $("speed-out").textContent = `${cps().toLocaleString()}/s`; });
+$("speed").addEventListener("input", () => { runner.speed = cps(); if (sim()) sim().lingerMin = lingerCycles(); $("speed-out").textContent = `${cps().toLocaleString()}/s`; });
 $("gap").addEventListener("change", () => reset(true));
 $("gap-dec").addEventListener("click", () => { $("gap").value = gapValue() - 1; reset(true); });
 $("gap-inc").addEventListener("click", () => { $("gap").value = gapValue() + 1; reset(true); });
